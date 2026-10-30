@@ -2,8 +2,10 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
+import swaggerSpec from "./config/swagger.js";
 
 dotenv.config();
 
@@ -20,6 +22,9 @@ app.use(express.json());
 app.get("/", (_req, res) => {
   res.json({ message: "FamCare API is running!" });
 });
+
+// ── Swagger UI ──────────────────────────────────────────────────────────────
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
