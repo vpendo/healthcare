@@ -6,7 +6,7 @@ import { DoctorProfile } from "../models/DoctorProfile.js";
 
 function createToken(
   userId: string,
-  role: "patient" | "receptionist" | "doctor"
+  role: "patient" | "receptionist" | "doctor" | "admin"
 ): string {
   const secret = process.env.JWT_SECRET || "test-jwt-secret-key-for-testing";
   return jwt.sign({ sub: userId, role }, secret, {
@@ -19,8 +19,20 @@ describe("Doctor Endpoints", () => {
   let doctorUser: { _id: string; token: string };
   let receptionistUser: { _id: string; token: string };
   let patientUser: { _id: string; token: string };
+  let adminUser: { _id: string; token: string };
 
   beforeEach(async () => {
+    // Create admin user
+    const adm = await User.create({
+      name: "Admin User",
+      email: "admin@example.com",
+      passwordHash: "hashedpassword123",
+      role: "admin",
+    });
+    adminUser = {
+      _id: String(adm._id),
+      token: createToken(String(adm._id), "admin"),
+    };
     // Create doctor user
     const doc = await User.create({
       name: "Dr. Alice Smith",
@@ -74,10 +86,10 @@ describe("Doctor Endpoints", () => {
       expect(res.body.profile.name).toBe("Dr. Alice Smith");
     });
 
-    it("should allow a receptionist to create a profile for a doctor", async () => {
+    it("should allow an admin to create a profile for a doctor", async () => {
       const res = await request(app)
         .post("/api/doctors")
-        .set("Authorization", `Bearer ${receptionistUser.token}`)
+        .set("Authorization", `Bearer ${adminUser.token}`)
         .send({
           userId: doctorUser._id,
           specialty: "Pediatrics",
@@ -86,6 +98,18 @@ describe("Doctor Endpoints", () => {
       expect(res.status).toBe(201);
       expect(res.body.profile.specialty).toBe("pediatrics");
       expect(res.body.profile.doctorId).toBe(doctorUser._id);
+    });
+
+    it("should forbid a receptionist from creating a doctor profile", async () => {
+      const res = await request(app)
+        .post("/api/doctors")
+        .set("Authorization", `Bearer ${receptionistUser.token}`)
+        .send({
+          userId: doctorUser._id,
+          specialty: "Pediatrics",
+        });
+
+      expect(res.status).toBe(403);
     });
 
     it("should forbid a patient from creating a doctor profile", async () => {
@@ -114,7 +138,7 @@ describe("Doctor Endpoints", () => {
     it("should reject profile creation if referenced user is not a doctor", async () => {
       const res = await request(app)
         .post("/api/doctors")
-        .set("Authorization", `Bearer ${receptionistUser.token}`)
+        .set("Authorization", `Bearer ${adminUser.token}`)
         .send({
           userId: patientUser._id,
           specialty: "Cardiology",
@@ -232,14 +256,23 @@ describe("Doctor Endpoints", () => {
       expect(res.status).toBe(403);
     });
 
-    it("should allow a receptionist to update any doctor's profile", async () => {
+    it("should allow an admin to update any doctor's profile", async () => {
+      const res = await request(app)
+        .patch(`/api/doctors/${doctorUser._id}`)
+        .set("Authorization", `Bearer ${adminUser.token}`)
+        .send({ specialty: "Internal Medicine" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.doctor.specialty).toBe("internal medicine");
+    });
+
+    it("should forbid a receptionist from updating a doctor's profile", async () => {
       const res = await request(app)
         .patch(`/api/doctors/${doctorUser._id}`)
         .set("Authorization", `Bearer ${receptionistUser.token}`)
         .send({ specialty: "Internal Medicine" });
 
-      expect(res.status).toBe(200);
-      expect(res.body.doctor.specialty).toBe("internal medicine");
+      expect(res.status).toBe(403);
     });
   });
 });
