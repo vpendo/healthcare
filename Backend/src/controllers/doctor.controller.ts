@@ -30,7 +30,7 @@ const updateDoctorProfileSchema = z.object({
 /**
  * POST /api/doctors
  * Creates a doctor profile.
- * Access: Doctor (for themselves) or Receptionist (specifying userId).
+ * Access: Doctor (for themselves) or Admin (specifying userId).
  */
 export async function createDoctorProfile(
   req: Request,
@@ -48,11 +48,11 @@ export async function createDoctorProfile(
   const currentUser = req.user!;
   let targetUserId = currentUser.sub;
 
-  // If a receptionist is creating the profile, they must supply the target doctor's userId
-  if (currentUser.role === "receptionist") {
+  // If an admin is creating the profile, they must supply the target doctor's userId
+  if (currentUser.role === "admin") {
     if (!parsed.data.userId) {
       res.status(400).json({
-        message: "userId is required when creating a doctor profile as staff.",
+        message: "userId is required when creating a doctor profile as admin.",
       });
       return;
     }
@@ -207,7 +207,7 @@ export async function getDoctorById(
 /**
  * PATCH /api/doctors/:doctorId
  * Updates doctor specialty.
- * Access: Doctor (updating own profile) or Receptionist.
+ * Access: Doctor (updating own profile) or Admin.
  */
 export async function updateDoctorProfile(
   req: Request,

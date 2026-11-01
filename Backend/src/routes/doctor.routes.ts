@@ -71,7 +71,7 @@ router.get("/:doctorId", authenticate, getDoctorById);
  * /api/doctors:
  *   post:
  *     summary: Create a doctor profile
- *     description: Allows doctors to create their own profile, or receptionists to create a profile for a doctor account.
+ *     description: Allows doctors to create their own profile, or admins to create a profile for a doctor account.
  *     tags: [Doctors]
  *     security:
  *       - bearerAuth: []
@@ -86,7 +86,7 @@ router.get("/:doctorId", authenticate, getDoctorById);
  *             properties:
  *               userId:
  *                 type: string
- *                 description: Target doctor's user ID (required when created by receptionist)
+ *                 description: Target doctor's user ID (required when created by admin)
  *                 example: 665f1a2b3c4d5e6f7a8b9c0d
  *               specialty:
  *                 type: string
@@ -104,7 +104,7 @@ router.get("/:doctorId", authenticate, getDoctorById);
 router.post(
   "/",
   authenticate,
-  requireRole("doctor", "receptionist"),
+  requireRole("doctor", "admin"),
   createDoctorProfile
 );
 
@@ -113,7 +113,7 @@ router.post(
  * /api/doctors/{doctorId}:
  *   patch:
  *     summary: Update doctor specialty
- *     description: Allows doctors to update their own specialty, or receptionists to update any doctor's profile.
+ *     description: Allows doctors to update their own specialty, or admins to update any doctor's profile.
  *     tags: [Doctors]
  *     security:
  *       - bearerAuth: []
@@ -146,7 +146,7 @@ router.post(
 router.patch(
   "/:doctorId",
   authenticate,
-  requireRole("doctor", "receptionist"),
+  requireRole("doctor", "admin"),
   updateDoctorProfile
 );
 
