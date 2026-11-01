@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 
 export interface JwtUserPayload {
   sub: string; // user._id
-  role: "patient" | "receptionist" | "doctor";
+  role: "patient" | "receptionist" | "doctor" | "admin";
 }
 
 /**
