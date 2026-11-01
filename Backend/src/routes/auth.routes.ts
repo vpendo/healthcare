@@ -1,6 +1,13 @@
 import { Router } from "express";
-import { register, login, logout, me } from "../controllers/auth.controller.js";
+import {
+  register,
+  login,
+  logout,
+  me,
+  createStaffAccount,
+} from "../controllers/auth.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { requireRole } from "../middleware/role.middleware.js";
 
 const router = Router();
 
@@ -173,5 +180,55 @@ router.post("/logout", authenticate, logout);
  *               $ref: '#/components/schemas/MessageResponse'
  */
 router.get("/me", authenticate, me);
+
+/**
+ * @swagger
+ * /api/auth/staff:
+ *   post:
+ *     summary: Create a doctor or receptionist account
+ *     description: Admin only. Creates a new staff account with the specified role (doctor or receptionist).
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *               - role
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Dr. Alice Smith
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: alice@famcare.com
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: securePass123
+ *               role:
+ *                 type: string
+ *                 enum: [doctor, receptionist]
+ *                 example: doctor
+ *     responses:
+ *       201:
+ *         description: Staff account created successfully
+ *       400:
+ *         description: Validation error or invalid role
+ *       401:
+ *         description: Not authenticated
+ *       403:
+ *         description: Forbidden - Admin access required
+ *       409:
+ *         description: Email already in use
+ */
+router.post("/staff", authenticate, requireRole("admin"), createStaffAccount);
 
 export default router;
