@@ -16,9 +16,9 @@ const navLinks: NavLinkItem[] = [
 const serviceLinks: NavLinkItem[] = [
   { name: "General Consultation", path: "/services/general-consultation" },
   { name: "Dental Care", path: "/services/dental-care" },
+  { name: "Optical Care", path: "/services/optical-care" },
   { name: "View All Services", path: "/services" },
 ];
-
 function FamCareLogo({ className = "h-9 w-9" }: { className?: string }) {
   const heart =
     "M16 28.5C6.5 21 2 15 2 9.8 2 5.8 5 3 8.7 3c3 0 5.9 1.6 7.3 4.2C17.4 4.6 20.3 3 23.3 3 27 3 30 5.8 30 9.8 30 15 25.5 21 16 28.5Z";

@@ -7,6 +7,12 @@ import About from "./Pages/about";
 import Contact from "./Pages/contact";
 import Login from "./Pages/login";
 import Register from "./Pages/Register";
+import ServicesPage from "./Pages/ServicesPage";
+
+// Service detail pages
+import GeneralConsultation from "./Pages/GeneralConsultation";
+import DentalCare from "./Pages/DentalCare";
+import OpticalCare from "./Pages/OpticalCare";
 
 // Patient layout
 import Layout from "./Components/Patients/Layout";
@@ -30,14 +36,26 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Services */}
+        <Route path="/services" element={<ServicesPage />} />
+        <Route
+          path="/services/general-consultation"
+          element={<GeneralConsultation />}
+        />
+        <Route
+          path="/services/dental-care"
+          element={<DentalCare />}
+        />
+        <Route
+          path="/services/optical-care"
+          element={<OpticalCare />}
+        />
+
         {/* Patient dashboard */}
         <Route path="/patients" element={<Layout />}>
           <Route index element={<Dashboard />} />
 
-          <Route
-            path="intake"
-            element={<Intake />}
-          />
+          <Route path="intake" element={<Intake />} />
 
           <Route
             path="book-appointment"
@@ -54,10 +72,7 @@ export default function App() {
             element={<AppointmentDetails />}
           />
 
-          <Route
-            path="profile"
-            element={<Profile />}
-          />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
     </BrowserRouter>
