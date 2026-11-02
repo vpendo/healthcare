@@ -5,6 +5,7 @@ import {
   getMyAppointments,
   getAppointmentById,
   cancelAppointment,
+  updateDoctorNote,
 } from "../controllers/appointment.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireRole } from "../middleware/role.middleware.js";
@@ -197,5 +198,49 @@ router.get("/:appointmentId", authenticate, getAppointmentById);
  *         description: Appointment not found
  */
 router.patch("/:appointmentId/cancel", authenticate, cancelAppointment);
+
+/**
+ * @swagger
+ * /api/appointments/{appointmentId}/note:
+ *   patch:
+ *     summary: Add or update doctor consultation notes
+ *     description: Allows the assigned doctor or admin to record medical notes on an appointment.
+ *     tags: [Appointments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - doctorNote
+ *             properties:
+ *               doctorNote:
+ *                 type: string
+ *                 example: "Patient exhibits clear lungs, throat inflammation. Prescribed amoxicillin 500mg 3x daily for 7 days."
+ *     responses:
+ *       200:
+ *         description: Doctor note updated successfully
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Forbidden - Not authorized to add notes to this appointment
+ *       404:
+ *         description: Appointment not found
+ */
+router.patch(
+  "/:appointmentId/note",
+  authenticate,
+  requireRole("doctor", "admin"),
+  updateDoctorNote
+);
 
 export default router;

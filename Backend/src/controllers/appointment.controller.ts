@@ -541,3 +541,69 @@ export async function cancelAppointment(
     },
   });
 }
+
+const updateDoctorNoteSchema = z.object({
+  doctorNote: z.string().trim().min(1, "doctorNote cannot be empty."),
+});
+
+/**
+ * PATCH /api/appointments/:appointmentId/note
+ * Adds or updates clinical notes for an appointment.
+ * Access: Assigned Doctor or Admin.
+ */
+export async function updateDoctorNote(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { appointmentId } = req.params;
+
+  if (
+    !appointmentId ||
+    typeof appointmentId !== "string" ||
+    !mongoose.Types.ObjectId.isValid(appointmentId)
+  ) {
+    res.status(400).json({ message: "Invalid appointment ID." });
+    return;
+  }
+
+  const parsed = updateDoctorNoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Validation error.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
+    return;
+  }
+
+  const appointment = await Appointment.findById(appointmentId);
+  if (!appointment) {
+    res.status(404).json({ message: "Appointment not found." });
+    return;
+  }
+
+  const currentUser = req.user!;
+
+  if (
+    currentUser.role === "doctor" &&
+    String(appointment.doctorId) !== currentUser.sub
+  ) {
+    res.status(403).json({
+      message:
+        "Forbidden: You are not authorized to add notes for this appointment.",
+    });
+    return;
+  }
+
+  appointment.doctorNote = parsed.data.doctorNote;
+  await appointment.save();
+
+  res.status(200).json({
+    message: "Doctor note updated successfully.",
+    appointment: {
+      id: appointment._id,
+      doctorId: appointment.doctorId,
+      doctorNote: appointment.doctorNote,
+      updatedAt: appointment.updatedAt,
+    },
+  });
+}
