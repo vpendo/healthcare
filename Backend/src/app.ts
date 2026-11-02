@@ -7,6 +7,7 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import authRoutes from "./routes/auth.routes.js";
 import doctorRoutes from "./routes/doctor.routes.js";
+import slotRoutes from "./routes/slot.routes.js";
 import swaggerSpec from "./config/swagger.js";
 
 const app = express();
@@ -31,6 +32,7 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/doctors", doctorRoutes);
+app.use("/api/slots", slotRoutes);
 
 // ── Global error handler ─────────────────────────────────────────────────────
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
