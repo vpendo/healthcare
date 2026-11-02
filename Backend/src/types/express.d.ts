@@ -3,7 +3,7 @@ declare global {
     interface Request {
       user?: {
         sub: string;
-        role: "patient" | "receptionist" | "doctor";
+        role: "patient" | "receptionist" | "doctor" | "admin";
       };
     }
   }
