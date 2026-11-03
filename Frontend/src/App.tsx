@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Public pages
@@ -8,6 +7,7 @@ import Contact from "./Pages/contact";
 import Login from "./Pages/login";
 import Register from "./Pages/Register";
 import ServicesPage from "./Pages/ServicesPage";
+import FindDoctor from "./Pages/FindDoctor";
 
 // Service detail pages
 import GeneralConsultation from "./Pages/GeneralConsultation";
@@ -35,6 +35,7 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/doctors" element={<FindDoctor />} />
 
         {/* Services */}
         <Route path="/services" element={<ServicesPage />} />
@@ -54,24 +55,19 @@ export default function App() {
         {/* Patient dashboard */}
         <Route path="/patients" element={<Layout />}>
           <Route index element={<Dashboard />} />
-
           <Route path="intake" element={<Intake />} />
-
           <Route
             path="book-appointment"
             element={<BookAppointment />}
           />
-
           <Route
             path="appointments"
             element={<MyAppointments />}
           />
-
           <Route
             path="appointments/:appointmentId"
             element={<AppointmentDetails />}
           />
-
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
