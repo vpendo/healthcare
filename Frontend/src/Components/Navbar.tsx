@@ -175,7 +175,7 @@ export default function Navbar() {
         {/* Desktop actions */}
         <div className="hidden items-center gap-3 md:flex">
           <Link
-            to="/doctors"
+            to="/find-doctor"
             className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[#299BCF] transition-colors hover:bg-[#EAF3FC] hover:text-[#E51E2A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55B9E8]"
           >
             Find a Doctor
@@ -277,7 +277,7 @@ export default function Navbar() {
 
           <div className="mt-4 flex gap-3 border-t border-[#D7E8F5] pt-4">
             <Link
-              to="/doctors"
+               to="/find-doctor"
               className="flex-1 rounded-lg border border-[#55B9E8] bg-white px-4 py-3 text-center text-sm font-semibold text-[#299BCF] transition-colors hover:bg-[#EAF3FC] hover:text-[#E51E2A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55B9E8]"
             >
               Find a Doctor
