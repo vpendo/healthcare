@@ -43,7 +43,7 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/doctors" element={<FindDoctor />} />
+        <Route path="/find-doctor" element={<FindDoctor />} />
 
         {/* Services */}
         <Route path="/services" element={<ServicesPage />} />
@@ -64,38 +64,19 @@ export default function App() {
         <Route path="/patients" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="intake" element={<Intake />} />
-<<<<<<< HEAD
           <Route path="book-appointment" element={<BookAppointment />} />
           <Route path="appointments" element={<MyAppointments />} />
           <Route path="appointments/:appointmentId" element={<AppointmentDetails />} />
           <Route path="profile" element={<Profile />} /> 
-          </Route>
-
-
-          {/* Doctor dashboard */}
-          <Route path="/doctors" element={<DoctorLayout />}>
-            <Route index element={<DoctorDashboard />} />
-            <Route path="profile" element={<DoctorProfile />} />
-            <Route path="consultations" element={<Consultations />} />
-            <Route path="schedule" element={<MySchedule />} />
-          </Route>
-
-=======
-          <Route
-            path="book-appointment"
-            element={<BookAppointment />}
-          />
-          <Route
-            path="appointments"
-            element={<MyAppointments />}
-          />
-          <Route
-            path="appointments/:appointmentId"
-            element={<AppointmentDetails />}
-          />
-          <Route path="profile" element={<Profile />} />
         </Route>
->>>>>>> main
+
+        {/* Doctor dashboard */}
+        <Route path="/doctors" element={<DoctorLayout />}>
+          <Route index element={<DoctorDashboard />} />
+          <Route path="profile" element={<DoctorProfile />} />
+          <Route path="consultations" element={<Consultations />} />
+          <Route path="schedule" element={<MySchedule />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
