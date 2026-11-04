@@ -11,9 +11,7 @@ import { User } from "../models/User.js";
 const registerSchema = z.object({
   name: z.string().min(1, "Name is required.").trim(),
   email: z.string().email("Invalid email address.").toLowerCase().trim(),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters long."),
+  password: z.string().min(8, "Password must be at least 8 characters long."),
 });
 
 const loginSchema = z.object({
@@ -50,7 +48,10 @@ function signToken(userId: string, role: string): string {
 export async function register(req: Request, res: Response): Promise<void> {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Validation error.", errors: parsed.error.flatten().fieldErrors });
+    res.status(400).json({
+      message: "Validation error.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
     return;
   }
 
@@ -58,14 +59,21 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   const existing = await User.findOne({ email }).lean();
   if (existing) {
-    res.status(409).json({ message: "An account with this email already exists." });
+    res
+      .status(409)
+      .json({ message: "An account with this email already exists." });
     return;
   }
 
   const SALT_ROUNDS = 12;
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  const user = await User.create({ name, email, passwordHash, role: "patient" });
+  const user = await User.create({
+    name,
+    email,
+    passwordHash,
+    role: "patient",
+  });
 
   const token = signToken(String(user._id), user.role);
 
@@ -88,7 +96,10 @@ export async function register(req: Request, res: Response): Promise<void> {
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Validation error.", errors: parsed.error.flatten().fieldErrors });
+    res.status(400).json({
+      message: "Validation error.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
     return;
   }
 
@@ -148,6 +159,63 @@ export async function me(req: Request, res: Response): Promise<void> {
   }
 
   res.status(200).json({
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Admin-only controllers
+// ---------------------------------------------------------------------------
+
+const createStaffSchema = z.object({
+  name: z.string().min(1, "Name is required.").trim(),
+  email: z.string().email("Invalid email address.").toLowerCase().trim(),
+  password: z.string().min(8, "Password must be at least 8 characters long."),
+  role: z.enum(["doctor", "receptionist"], {
+    message: "Role must be either 'doctor' or 'receptionist'.",
+  }),
+});
+
+/**
+ * POST /api/auth/staff
+ * Admin only. Creates a doctor or receptionist account.
+ */
+export async function createStaffAccount(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsed = createStaffSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Validation error.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
+    return;
+  }
+
+  const { name, email, password, role } = parsed.data;
+
+  const existing = await User.findOne({ email }).lean();
+  if (existing) {
+    res
+      .status(409)
+      .json({ message: "An account with this email already exists." });
+    return;
+  }
+
+  const SALT_ROUNDS = 12;
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  const user = await User.create({ name, email, passwordHash, role });
+
+  res.status(201).json({
+    message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created successfully.`,
     user: {
       id: user._id,
       name: user.name,

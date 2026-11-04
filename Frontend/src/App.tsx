@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 // Public pages
 import Home from "./Pages/Home";
@@ -6,6 +5,13 @@ import About from "./Pages/about";
 import Contact from "./Pages/contact";
 import Login from "./Pages/login";
 import Register from "./Pages/Register";
+import ServicesPage from "./Pages/ServicesPage";
+import FindDoctor from "./Pages/FindDoctor";
+
+// Service detail pages
+import GeneralConsultation from "./Pages/GeneralConsultation";
+import DentalCare from "./Pages/DentalCare";
+import OpticalCare from "./Pages/OpticalCare";
 
 // Patient layout
 import Layout from "./Components/Patients/Layout";
@@ -37,11 +43,28 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/doctors" element={<FindDoctor />} />
+
+        {/* Services */}
+        <Route path="/services" element={<ServicesPage />} />
+        <Route
+          path="/services/general-consultation"
+          element={<GeneralConsultation />}
+        />
+        <Route
+          path="/services/dental-care"
+          element={<DentalCare />}
+        />
+        <Route
+          path="/services/optical-care"
+          element={<OpticalCare />}
+        />
 
         {/* Patient dashboard */}
         <Route path="/patients" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="intake" element={<Intake />} />
+<<<<<<< HEAD
           <Route path="book-appointment" element={<BookAppointment />} />
           <Route path="appointments" element={<MyAppointments />} />
           <Route path="appointments/:appointmentId" element={<AppointmentDetails />} />
@@ -57,6 +80,22 @@ export default function App() {
             <Route path="schedule" element={<MySchedule />} />
           </Route>
 
+=======
+          <Route
+            path="book-appointment"
+            element={<BookAppointment />}
+          />
+          <Route
+            path="appointments"
+            element={<MyAppointments />}
+          />
+          <Route
+            path="appointments/:appointmentId"
+            element={<AppointmentDetails />}
+          />
+          <Route path="profile" element={<Profile />} />
+        </Route>
+>>>>>>> main
       </Routes>
     </BrowserRouter>
   );

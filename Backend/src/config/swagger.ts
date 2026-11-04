@@ -30,7 +30,11 @@ const options: swaggerJSDoc.Options = {
           properties: {
             id: { type: "string", example: "665f1a2b3c4d5e6f7a8b9c0d" },
             name: { type: "string", example: "Jane Doe" },
-            email: { type: "string", format: "email", example: "jane@example.com" },
+            email: {
+              type: "string",
+              format: "email",
+              example: "jane@example.com",
+            },
             role: {
               type: "string",
               enum: ["patient", "receptionist", "doctor"],
