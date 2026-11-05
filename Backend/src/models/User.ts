@@ -6,6 +6,8 @@ export interface IUser {
   email: string;
   passwordHash: string;
   role: "patient" | "receptionist" | "doctor" | "admin";
+  passwordResetCodeHash?: string;
+  passwordResetExpires?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -34,6 +36,14 @@ const userSchema = new Schema<IUser>(
       enum: ["patient", "receptionist", "doctor", "admin"],
       default: "patient",
       required: true,
+    },
+    passwordResetCodeHash: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
     },
   },
   {

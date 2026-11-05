@@ -12,6 +12,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../Context/AuthContext";
 
 interface Appointment {
   _id: string;
@@ -59,13 +60,37 @@ function FamCareLogo() {
 }
 
 export default function Dashboard() {
+  const { user, token, loading: authLoading } = useAuth();
+
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "there";
+
+  const hour = new Date().getHours();
+
+  const greeting =
+    hour < 12
+      ? "Good morning"
+      : hour < 18
+      ? "Good afternoon"
+      : "Good evening";
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = (
+    import.meta.env.VITE_API_URL || "http://localhost:5000"
+  ).replace(/\/+$/, "");
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!token) {
+      setAppointments([]);
+      setLoading(false);
+      setError("Please log in to view your appointments.");
+      return;
+    }
+
     const fetchAppointments = async () => {
       try {
         setLoading(true);
@@ -74,6 +99,9 @@ export default function Dashboard() {
         const response = await fetch(
           `${API_URL}/api/appointments/my`,
           {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
             credentials: "include",
           }
         );
@@ -99,7 +127,7 @@ export default function Dashboard() {
     };
 
     fetchAppointments();
-  }, [API_URL]);
+  }, [API_URL, token, authLoading]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -147,11 +175,11 @@ export default function Dashboard() {
             </p>
 
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Welcome to your dashboard
+              {greeting}, {firstName}! 👋
             </h1>
 
             <p className="mt-2 text-sm text-slate-500 sm:text-base">
-              Here’s an overview of your health journey.
+              Welcome back to FamCare. Here's an overview of your health journey.
             </p>
           </div>
         </div>

@@ -1,3 +1,4 @@
+
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -9,9 +10,10 @@ import {
   ArrowRight,
   Home,
 } from "lucide-react";
+import { useAuth, type AuthUser, type UserRole } from "../Context/AuthContext";
 
 const API_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:4000"
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
 
 const loginSchema = z.object({
@@ -24,6 +26,31 @@ const loginSchema = z.object({
     .transform((value) => value.toLowerCase()),
   password: z.string().min(1, "Password is required."),
 });
+
+const isUserRole = (role: unknown): role is UserRole => {
+  return ["patient", "doctor", "receptionist", "admin"].includes(
+    role as string
+  );
+};
+
+function getDashboardPath(role: UserRole): string {
+  switch (role) {
+    case "patient":
+      return "/patients";
+
+    case "doctor":
+      return "/doctors";
+
+    case "receptionist":
+      return "/";
+
+    case "admin":
+      return "/";
+
+    default:
+      return "/";
+  }
+}
 
 function FamCareLogo({ className = "h-10 w-10" }: { className?: string }) {
   const heart =
@@ -66,6 +93,7 @@ function Wordmark() {
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,7 +101,11 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const successMessage = location.state?.message as string | undefined;
+  const locationState = location.state as
+    | { message?: string }
+    | null;
+
+  const successMessage = locationState?.message;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -91,21 +123,53 @@ export default function Login() {
     try {
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(validation.data),
       });
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Invalid email or password.");
+        throw new Error(
+          data.message || "Invalid email or password."
+        );
       }
 
-      navigate("/", { replace: true });
+      // Validate the backend response before saving the session.
+      if (
+        typeof data.token !== "string" ||
+        !data.user ||
+        typeof data.user.id !== "string" ||
+        typeof data.user.name !== "string" ||
+        typeof data.user.email !== "string" ||
+        !isUserRole(data.user.role)
+      ) {
+        throw new Error(
+          "Invalid server response. Please try again."
+        );
+      }
+
+      const user: AuthUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role,
+      };
+
+      // Save the token and user details.
+      login(data.token, user);
+
+      // Redirect according to the user's role.
+      navigate(getDashboardPath(user.role), {
+        replace: true,
+      });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to sign in. Try again."
+        err instanceof Error
+          ? err.message
+          : "Unable to sign in. Try again."
       );
     } finally {
       setLoading(false);
@@ -126,7 +190,9 @@ export default function Login() {
         </Link>
 
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome back
+          </h1>
           <p className="mt-2 text-sm leading-6 text-gray-500">
             Sign in to manage your clinic appointments.
           </p>
@@ -158,13 +224,16 @@ export default function Login() {
             >
               Email address
             </label>
+
             <div className="relative">
               <Mail
                 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
                 size={19}
               />
+
               <input
                 id="email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -183,13 +252,16 @@ export default function Login() {
             >
               Password
             </label>
+
             <div className="relative">
               <LockKeyhole
                 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
                 size={19}
               />
+
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Enter your password"
@@ -198,13 +270,18 @@ export default function Login() {
                 required
                 className="w-full rounded-xl border border-gray-200 py-3.5 pl-11 pr-12 text-sm outline-none focus:border-[#55B9E8] focus:ring-4 focus:ring-[#55B9E8]/15"
               />
+
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#299BCF]"
               >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                {showPassword ? (
+                  <EyeOff size={19} />
+                ) : (
+                  <Eye size={19} />
+                )}
               </button>
             </div>
 

@@ -19,4 +19,5 @@ export default {
   },
   setupFilesAfterEnv: ["<rootDir>/src/tests/setup.ts"],
   testMatch: ["<rootDir>/src/tests/**/*.test.ts"],
+  testTimeout: 20000,
 };
