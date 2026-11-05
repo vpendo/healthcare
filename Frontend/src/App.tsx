@@ -11,6 +11,9 @@ import Login from "./Pages/login";
 import Register from "./Pages/Register";
 import ServicesPage from "./Pages/ServicesPage";
 import FindDoctor from "./Pages/FindDoctor";
+import ForgotPassword from "./Pages/ForgotPassword";
+import VerifyResetCode from "./Pages/VerifyResetCode";
+import ResetPassword from "./Pages/ResetPassword";
 
 // Service detail pages
 import GeneralConsultation from "./Pages/GeneralConsultation";
@@ -48,7 +51,11 @@ export default function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-reset-code" element={<VerifyResetCode />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/find-doctor" element={<FindDoctor />} />
+          
 
           {/* Services */}
           <Route path="/services" element={<ServicesPage />} />
