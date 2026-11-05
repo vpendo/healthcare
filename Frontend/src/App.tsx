@@ -1,4 +1,8 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./Context/AuthContext";
+import ProtectedRoute from "./Components/ProtectedRoute";
+
 // Public pages
 import Home from "./Pages/Home";
 import About from "./Pages/about";
@@ -35,49 +39,64 @@ import MySchedule from "./Pages/Doctors/MySchedule";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public pages */}
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/find-doctor" element={<FindDoctor />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public pages */}
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/find-doctor" element={<FindDoctor />} />
 
-        {/* Services */}
-        <Route path="/services" element={<ServicesPage />} />
-        <Route
-          path="/services/general-consultation"
-          element={<GeneralConsultation />}
-        />
-        <Route
-          path="/services/dental-care"
-          element={<DentalCare />}
-        />
-        <Route
-          path="/services/optical-care"
-          element={<OpticalCare />}
-        />
+          {/* Services */}
+          <Route path="/services" element={<ServicesPage />} />
+          <Route
+            path="/services/general-consultation"
+            element={<GeneralConsultation />}
+          />
+          <Route
+            path="/services/dental-care"
+            element={<DentalCare />}
+          />
+          <Route
+            path="/services/optical-care"
+            element={<OpticalCare />}
+          />
 
-        {/* Patient dashboard */}
-        <Route path="/patients" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="intake" element={<Intake />} />
-          <Route path="book-appointment" element={<BookAppointment />} />
-          <Route path="appointments" element={<MyAppointments />} />
-          <Route path="appointments/:appointmentId" element={<AppointmentDetails />} />
-          <Route path="profile" element={<Profile />} /> 
-        </Route>
+          {/* Patient routes - Patient role only */}
+          <Route element={<ProtectedRoute allowedRoles={["patient"]} />}>
+            <Route path="/patients" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="intake" element={<Intake />} />
+              <Route
+                path="book-appointment"
+                element={<BookAppointment />}
+              />
+              <Route path="appointments" element={<MyAppointments />} />
+              <Route
+                path="appointments/:appointmentId"
+                element={<AppointmentDetails />}
+              />
+              <Route path="profile" element={<Profile />} />
+            </Route>
+          </Route>
 
-        {/* Doctor dashboard */}
-        <Route path="/doctors" element={<DoctorLayout />}>
-          <Route index element={<DoctorDashboard />} />
-          <Route path="profile" element={<DoctorProfile />} />
-          <Route path="consultations" element={<Consultations />} />
-          <Route path="schedule" element={<MySchedule />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          {/* Doctor routes - Doctor role only */}
+          <Route element={<ProtectedRoute allowedRoles={["doctor"]} />}>
+            <Route path="/doctors" element={<DoctorLayout />}>
+              <Route index element={<DoctorDashboard />} />
+              <Route path="profile" element={<DoctorProfile />} />
+              <Route path="consultations" element={<Consultations />} />
+              <Route path="schedule" element={<MySchedule />} />
+            </Route>
+          </Route>
+
+          {/* Unknown routes */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
