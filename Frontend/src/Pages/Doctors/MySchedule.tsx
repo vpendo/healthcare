@@ -1,25 +1,33 @@
-
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Clock, Plus } from "lucide-react";
+import {
+  CalendarDays,
+  Clock,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useAuth } from "../../Context/AuthContext";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
 
-interface ScheduleEntry {
-  id: string;
-  date: string;
-  time: string;
-  patient: string;
-  status: string;
-}
-
 interface AvailabilitySlot {
   id: string;
   startTime: string;
   endTime: string;
   status: "open" | "booked" | "unavailable";
+}
+
+interface ScheduleEntry {
+  id: string;
+  time: string;
+  sortTime: number;
+  patient: string;
+  status: string;
+  type: "appointment" | "availability";
+  slot?: AvailabilitySlot;
 }
 
 interface QueueAppointment {
@@ -55,6 +63,20 @@ function formatTime(dateString: string) {
   });
 }
 
+function getLocalDateTime(dateString: string) {
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return {
+    date: `${year}-${month}-${day}`,
+    time: `${hours}:${minutes}`,
+  };
+}
+
 function getAppointmentStatus(appointment: QueueAppointment) {
   if (
     appointment.status === "completed" ||
@@ -86,6 +108,12 @@ export default function MySchedule() {
 
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("17:00");
+
+  const [editingSlot, setEditingSlot] =
+    useState<AvailabilitySlot | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -131,32 +159,34 @@ export default function MySchedule() {
       const availability: AvailabilitySlot[] = slotsData.slots || [];
       const appointments: QueueAppointment[] = queueData.queue || [];
 
-      // Show available and unavailable slots.
-      // Booked slots are represented by their actual appointments below.
       const availabilityEntries: ScheduleEntry[] = availability
         .filter((slot) => slot.status !== "booked")
         .map((slot) => ({
           id: slot.id,
-          date,
           time: `${formatTime(slot.startTime)} - ${formatTime(
             slot.endTime
           )}`,
+          sortTime: new Date(slot.startTime).getTime(),
           patient: "Available time",
           status:
             slot.status === "open" ? "Available" : "Unavailable",
+          type: "availability",
+          slot,
         }));
 
-      // Convert real appointments into schedule entries.
       const appointmentEntries: ScheduleEntry[] = appointments
         .filter((appointment) => appointment.slot)
         .map((appointment) => ({
           id: appointment.id,
-          date,
           time: `${formatTime(
             appointment.slot!.startTime
           )} - ${formatTime(appointment.slot!.endTime)}`,
+          sortTime: new Date(
+            appointment.slot!.startTime
+          ).getTime(),
           patient: appointment.patient?.name || "Unknown patient",
           status: getAppointmentStatus(appointment),
+          type: "appointment",
         }));
 
       setEntries([...appointmentEntries, ...availabilityEntries]);
@@ -176,11 +206,8 @@ export default function MySchedule() {
   }, [loadSchedule]);
 
   const filtered = entries
-    .filter(
-      (entry) =>
-        filter === "All" || entry.status === filter
-    )
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .filter((entry) => filter === "All" || entry.status === filter)
+    .sort((a, b) => a.sortTime - b.sortTime);
 
   async function addAvailability() {
     if (!token) {
@@ -193,7 +220,6 @@ export default function MySchedule() {
       return;
     }
 
-    // Convert the selected date and local times into ISO date strings.
     const startTime = new Date(`${date}T${start}:00`);
     const endTime = new Date(`${date}T${end}:00`);
 
@@ -237,6 +263,138 @@ export default function MySchedule() {
         err instanceof Error
           ? err.message
           : "Unable to add availability."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEditing(slot: AvailabilitySlot) {
+    const startParts = getLocalDateTime(slot.startTime);
+    const endParts = getLocalDateTime(slot.endTime);
+
+    setEditingSlot(slot);
+    setEditDate(startParts.date);
+    setEditStart(startParts.time);
+    setEditEnd(endParts.time);
+    setError("");
+    setSuccess("");
+  }
+
+  function cancelEditing() {
+    setEditingSlot(null);
+    setEditDate("");
+    setEditStart("");
+    setEditEnd("");
+  }
+
+  async function updateAvailability() {
+    if (!token || !editingSlot) {
+      setError("Unable to update this availability slot.");
+      return;
+    }
+
+    if (!editDate || !editStart || !editEnd || editStart >= editEnd) {
+      setError("Please enter a valid date and time range.");
+      return;
+    }
+
+    const startTime = new Date(`${editDate}T${editStart}:00`);
+    const endTime = new Date(`${editDate}T${editEnd}:00`);
+
+    if (
+      isNaN(startTime.getTime()) ||
+      isNaN(endTime.getTime()) ||
+      startTime <= new Date()
+    ) {
+      setError("Please select a valid future date and time.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/slots/${editingSlot.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(data));
+      }
+
+      cancelEditing();
+      setSuccess("Availability updated successfully!");
+      await loadSchedule();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update availability."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteAvailability(slot: AvailabilitySlot) {
+    if (!token) {
+      setError("Please log in again.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this availability slot?"
+    );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/slots/${slot.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(data));
+      }
+
+      if (editingSlot?.id === slot.id) {
+        cancelEditing();
+      }
+
+      setSuccess("Availability deleted successfully!");
+      await loadSchedule();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete availability."
       );
     } finally {
       setSaving(false);
@@ -294,6 +452,7 @@ export default function MySchedule() {
             onChange={(e) => {
               setDate(e.target.value);
               setSuccess("");
+              cancelEditing();
             }}
             className="w-full rounded-xl border border-gray-200 p-3"
           />
@@ -337,7 +496,7 @@ export default function MySchedule() {
           <div className="space-y-3">
             {filtered.map((entry) => (
               <div
-                key={`${entry.status}-${entry.id}`}
+                key={`${entry.type}-${entry.id}`}
                 className="flex flex-col gap-3 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
@@ -350,18 +509,128 @@ export default function MySchedule() {
                   </p>
                 </div>
 
-                <span
-                  className={`w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${getStatusStyle(
-                    entry.status
-                  )}`}
-                >
-                  {entry.status}
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className={`w-fit rounded-full px-3 py-1.5 text-xs font-semibold ${getStatusStyle(
+                      entry.status
+                    )}`}
+                  >
+                    {entry.status}
+                  </span>
+
+                  {entry.type === "availability" && entry.slot && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(entry.slot!)}
+                        disabled={saving}
+                        className="flex items-center gap-1 rounded-lg border border-[#299BCF] px-3 py-2 text-sm font-medium text-[#299BCF] hover:bg-[#EAF3FC] disabled:opacity-50"
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteAvailability(entry.slot!)}
+                        disabled={saving}
+                        className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 size={15} />
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
+
+      {editingSlot && (
+        <section className="rounded-2xl border border-[#299BCF]/20 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900">
+              Edit Availability
+            </h2>
+
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+              aria-label="Close edit form"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Date
+              </label>
+              <input
+                type="date"
+                value={editDate}
+                min={getTodayDate()}
+                onChange={(e) => setEditDate(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 p-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Start time
+              </label>
+              <input
+                type="time"
+                value={editStart}
+                onChange={(e) => setEditStart(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 p-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                End time
+              </label>
+              <input
+                type="time"
+                value={editEnd}
+                onChange={(e) => setEditEnd(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 p-3"
+              />
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={updateAvailability}
+              disabled={
+                saving ||
+                !editDate ||
+                !editStart ||
+                !editEnd ||
+                editStart >= editEnd
+              }
+              className="rounded-xl bg-[#299BCF] px-5 py-3 font-semibold text-white hover:bg-[#2187B5] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+
+            <button
+              type="button"
+              onClick={cancelEditing}
+              disabled={saving}
+              className="rounded-xl border border-gray-200 px-5 py-3 font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-xl font-bold text-gray-900">
@@ -399,6 +668,7 @@ export default function MySchedule() {
         </div>
 
         <button
+          type="button"
           onClick={addAvailability}
           disabled={
             saving ||

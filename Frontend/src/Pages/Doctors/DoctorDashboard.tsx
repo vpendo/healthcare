@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../Context/AuthContext";
@@ -130,10 +129,15 @@ export default function DoctorDashboard() {
 
         const queueData = await queueResponse.json();
 
+        // Use a local variable so the latest specialty is available
+        // immediately when formatting the appointments.
+        let specialty = doctorSpecialty;
+
         // The profile is optional; the queue should still load if it fails.
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
-          setDoctorSpecialty(profileData.doctor?.specialty || "");
+          specialty = profileData.doctor?.specialty || "";
+          setDoctorSpecialty(specialty);
         }
 
         const formattedAppointments: Appointment[] = (
@@ -143,7 +147,7 @@ export default function DoctorDashboard() {
           patient: appointment.patient?.name || "Unknown patient",
           time: formatTime(appointment.slot?.startTime),
           specialty:
-            doctorSpecialty ||
+            specialty ||
             appointment.suggestedSpecialty ||
             "Consultation",
           status: formatStatus(appointment.queueStatus),
