@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./Context/AuthContext";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -20,10 +19,11 @@ import GeneralConsultation from "./Pages/GeneralConsultation";
 import DentalCare from "./Pages/DentalCare";
 import OpticalCare from "./Pages/OpticalCare";
 
-// Patient layout
-import Layout from "./Components/Patients/Layout";
+// Admin
+import AdminDashboard from "./Pages/Admin/AdminDashboard";
 
-// Patient pages
+// Patient layout and pages
+import Layout from "./Components/Patients/Layout";
 import Dashboard from "./Pages/Patients/userDashboard";
 import BookAppointment from "./Pages/Patients/BookAppointment";
 import MyAppointments from "./Pages/Patients/MyAppointments";
@@ -31,19 +31,25 @@ import AppointmentDetails from "./Pages/Patients/AppointmentDetails";
 import Profile from "./Pages/Patients/Profile";
 import Intake from "./Pages/Patients/Intake";
 
-// Doctor layout
+// Doctor layout and pages
 import DoctorLayout from "./Components/Doctors/Layout";
-
-// Doctor pages
 import DoctorDashboard from "./Pages/Doctors/DoctorDashboard";
 import DoctorProfile from "./Pages/Doctors/DoctorProfile";
 import Consultations from "./Pages/Doctors/Consultations";
 import MySchedule from "./Pages/Doctors/MySchedule";
 
+// Receptionist layout and pages
+import ReceptionistLayout from "./Components/Receptionist/Layout";
+import ReceptionistDashboard from "./Pages/Receptionist/ReceptionistDashboard";
+import TodaysQueue from "./Pages/Receptionist/TodaysQueue";
+import ReceptionistAppointments from "./Pages/Receptionist/Appointments";
+import PatientDetails from "./Pages/Receptionist/PatientDetails";
+import ManageSlots from "./Pages/Receptionist/ManageSlots";
+
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <Routes>
           {/* Public pages */}
           <Route path="/" element={<Home />} />
@@ -55,7 +61,6 @@ export default function App() {
           <Route path="/verify-reset-code" element={<VerifyResetCode />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/find-doctor" element={<FindDoctor />} />
-          
 
           {/* Services */}
           <Route path="/services" element={<ServicesPage />} />
@@ -71,6 +76,9 @@ export default function App() {
             path="/services/optical-care"
             element={<OpticalCare />}
           />
+
+          {/* Admin dashboard */}
+          <Route path="/admin" element={<AdminDashboard />} />
 
           {/* Patient routes - Patient role only */}
           <Route element={<ProtectedRoute allowedRoles={["patient"]} />}>
@@ -100,10 +108,22 @@ export default function App() {
             </Route>
           </Route>
 
+          {/* Receptionist dashboard */}
+          <Route path="/receptionist" element={<ReceptionistLayout />}>
+            <Route index element={<ReceptionistDashboard />} />
+            <Route path="queue" element={<TodaysQueue />} />
+            <Route
+              path="appointments"
+              element={<ReceptionistAppointments />}
+            />
+            <Route path="patients" element={<PatientDetails />} />
+            <Route path="slots" element={<ManageSlots />} />
+          </Route>
+
           {/* Unknown routes */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
