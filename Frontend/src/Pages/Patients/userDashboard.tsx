@@ -14,15 +14,31 @@ import {
 import { Link } from "react-router-dom";
 import { useAuth } from "../../Context/AuthContext";
 
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+interface Doctor {
+  _id?: string;
+  id?: string;
+  name?: string;
+  specialty?: string;
+}
+
+interface AppointmentSlot {
+  startTime?: string;
+  endTime?: string;
+}
+
 interface Appointment {
   _id: string;
-  status: "Booked" | "Completed" | "Cancelled";
-  date: string;
-  time: string;
-  doctor: {
-    name: string;
-    specialty: string;
-  };
+  status: string;
+  queueStatus?: string;
+  doctorId?: Doctor | string;
+  doctor?: Doctor;
+  slotId?: AppointmentSlot | string;
+  slot?: AppointmentSlot;
+  createdAt?: string;
 }
 
 function FamCareLogo() {
@@ -77,10 +93,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const API_URL = (
-    import.meta.env.VITE_API_URL || "http://localhost:5000"
-  ).replace(/\/+$/, "");
-
   useEffect(() => {
     if (authLoading) return;
 
@@ -112,9 +124,11 @@ export default function Dashboard() {
 
         const data = await response.json();
 
-        setAppointments(
-          Array.isArray(data) ? data : data.appointments || []
-        );
+        const appointmentList = Array.isArray(data)
+          ? data
+          : data.appointments || [];
+
+        setAppointments(appointmentList);
       } catch (err) {
         setError(
           err instanceof Error
@@ -127,39 +141,82 @@ export default function Dashboard() {
     };
 
     fetchAppointments();
-  }, [API_URL, token, authLoading]);
+  }, [token, authLoading]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Support both populated doctor/slot fields and their original ID fields.
+  const getDoctor = (appointment: Appointment): Doctor | undefined => {
+    if (appointment.doctor) return appointment.doctor;
 
-  const upcomingAppointments = appointments
-    .filter((appointment) => {
-      const appointmentDate = new Date(appointment.date);
-      appointmentDate.setHours(0, 0, 0, 0);
+    if (
+      appointment.doctorId &&
+      typeof appointment.doctorId === "object"
+    ) {
+      return appointment.doctorId;
+    }
 
-      return (
-        appointment.status === "Booked" &&
-        appointmentDate >= today
-      );
-    })
-    .sort(
-      (a, b) =>
-        new Date(`${a.date}T${a.time}`).getTime() -
-        new Date(`${b.date}T${b.time}`).getTime()
-    );
+    return undefined;
+  };
 
-  const completedCount = appointments.filter(
-    (appointment) => appointment.status === "Completed"
-  ).length;
+  const getSlot = (
+    appointment: Appointment
+  ): AppointmentSlot | undefined => {
+    if (appointment.slot) return appointment.slot;
 
-  const nextAppointment = upcomingAppointments[0];
+    if (
+      appointment.slotId &&
+      typeof appointment.slotId === "object"
+    ) {
+      return appointment.slotId;
+    }
 
-  const formatDate = (date: string) =>
-    new Date(date).toLocaleDateString("en-US", {
+    return undefined;
+  };
+
+  const getStartTime = (appointment: Appointment) =>
+    getSlot(appointment)?.startTime || "";
+
+  const formatDate = (date: string) => {
+    if (!date) return "Date unavailable";
+
+    return new Date(date).toLocaleDateString("en-US", {
       month: "short",
       day: "2-digit",
       year: "numeric",
     });
+  };
+
+  const formatTime = (date: string) => {
+    if (!date) return "Time unavailable";
+
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  // Upcoming booked appointments, including today's future visits.
+  const upcomingAppointments = appointments
+    .filter((appointment) => {
+      const startTime = getStartTime(appointment);
+
+      return (
+        appointment.status?.toLowerCase() === "booked" &&
+        startTime &&
+        new Date(startTime).getTime() >= Date.now()
+      );
+    })
+    .sort(
+      (a, b) =>
+        new Date(getStartTime(a)).getTime() -
+        new Date(getStartTime(b)).getTime()
+    );
+
+  const completedCount = appointments.filter(
+    (appointment) =>
+      appointment.status?.toLowerCase() === "completed"
+  ).length;
+
+  const nextAppointment = upcomingAppointments[0];
 
   return (
     <div className="min-h-full space-y-6 bg-[#F1F8FD] p-4 text-slate-800 sm:p-6 lg:p-8">
@@ -291,22 +348,22 @@ export default function Dashboard() {
 
                   <div className="min-w-0">
                     <h3 className="font-bold text-slate-900">
-                      {nextAppointment.doctor?.name || "Doctor"}
+                      {getDoctor(nextAppointment)?.name || "Doctor"}
                     </h3>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      {nextAppointment.doctor?.specialty || "Specialty"}
+                      {getDoctor(nextAppointment)?.specialty || "Specialty"}
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
                       <span className="flex items-center gap-1.5">
                         <CalendarDays size={15} className="text-[#299BCF]" />
-                        {formatDate(nextAppointment.date)}
+                        {formatDate(getStartTime(nextAppointment))}
                       </span>
 
                       <span className="flex items-center gap-1.5">
                         <Clock3 size={15} className="text-[#299BCF]" />
-                        {nextAppointment.time}
+                        {formatTime(getStartTime(nextAppointment))}
                       </span>
                     </div>
                   </div>
@@ -383,10 +440,10 @@ export default function Dashboard() {
 
                       <div className="min-w-0">
                         <h3 className="truncate font-semibold text-slate-900">
-                          {appointment.doctor?.name || "Doctor"}
+                          {getDoctor(appointment)?.name || "Doctor"}
                         </h3>
                         <p className="mt-1 text-sm text-slate-500">
-                          {appointment.doctor?.specialty || "Specialty"}
+                          {getDoctor(appointment)?.specialty || "Specialty"}
                         </p>
                       </div>
                     </div>
@@ -394,12 +451,12 @@ export default function Dashboard() {
                     <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500 sm:w-56 sm:flex-col sm:gap-2">
                       <span className="flex items-center gap-2">
                         <CalendarDays size={15} className="text-[#299BCF]" />
-                        {formatDate(appointment.date)}
+                        {formatDate(getStartTime(appointment))}
                       </span>
 
                       <span className="flex items-center gap-2">
                         <Clock3 size={15} className="text-[#299BCF]" />
-                        {appointment.time}
+                        {formatTime(getStartTime(appointment))}
                       </span>
                     </div>
 

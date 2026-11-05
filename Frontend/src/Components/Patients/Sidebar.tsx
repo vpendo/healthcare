@@ -1,8 +1,10 @@
+
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   CalendarRange,
+  ClipboardList,
   House,
   LogOut,
   Menu,
@@ -38,7 +40,16 @@ const navigation: NavigationItem[] = [
     label: "My Appointments",
     icon: CalendarRange,
   },
-  { to: "/patients/profile", label: "Profile", icon: UserRound },
+  {
+    to: "/patients/visit-history",
+    label: "Visit History",
+    icon: ClipboardList,
+  },
+  {
+    to: "/patients/profile",
+    label: "Profile",
+    icon: UserRound,
+  },
 ];
 
 function FamCareLogo() {
@@ -147,7 +158,7 @@ export default function Sidebar() {
 
           {navigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink
-              key={to}
+              key={label}
               to={to}
               end={end}
               onClick={closeMenu}

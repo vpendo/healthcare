@@ -1,48 +1,164 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, ClipboardList, UserRound } from "lucide-react";
+import { useAuth } from "../../Context/AuthContext";
 
-const patients = [
-  {
-    id: 1,
-    name: "Patrick Niyonzima",
-    date: "2026-11-03",
-    specialty: "General Medicine",
-    status: "Completed",
-    notes: "Routine follow-up example",
-  },
-  {
-    id: 2,
-    name: "Jean Claude",
-    date: "2026-11-03",
-    specialty: "Cardiology",
-    status: "In Consultation",
-    notes: "Consultation in progress",
-  },
-  {
-    id: 3,
-    name: "Alice Mukamana",
-    date: "2026-11-03",
-    specialty: "General Medicine",
-    status: "Waiting",
-    notes: "Awaiting consultation",
-  },
-  {
-    id: 4,
-    name: "Grace Uwase",
-    date: "2026-10-29",
-    specialty: "General Medicine",
-    status: "Completed",
-    notes: "Previous appointment example",
-  },
-];
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+interface PatientRecord {
+  id: string;
+  name: string;
+  date: string;
+  specialty: string;
+  status: string;
+  notes: string;
+  symptoms: string;
+}
+
+interface BackendAppointment {
+  id?: string;
+  _id?: string;
+  patient?: { name?: string };
+  patientName?: string;
+  slot?: { startTime?: string };
+  startTime?: string;
+  appointmentDate?: string;
+  createdAt?: string;
+  suggestedSpecialty?: string;
+  specialty?: string;
+  doctor?: { specialty?: string };
+  status?: string;
+  queueStatus?: string;
+  doctorNote?: string;
+  symptoms?: string;
+  aiSummary?: string;
+}
+
+function formatDate(value?: string) {
+  if (!value) return "Date unavailable";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  return new Intl.DateTimeFormat("en-RW", {
+    timeZone: "Africa/Kigali",
+    dateStyle: "medium",
+  }).format(date);
+}
+
+function getDisplayStatus(appointment: BackendAppointment) {
+  if (
+    appointment.status === "cancelled"
+  ) {
+    return "Cancelled";
+  }
+
+  const queueStatus = appointment.queueStatus;
+
+  if (
+    appointment.status === "completed" ||
+    queueStatus === "done"
+  ) {
+    return "Completed";
+  }
+
+  if (queueStatus === "in_consultation") {
+    return "In Consultation";
+  }
+
+  if (
+    queueStatus === "waiting" ||
+    queueStatus === "not_arrived"
+  ) {
+    return "Waiting";
+  }
+
+  return "Waiting";
+}
+
+function mapAppointment(
+  appointment: BackendAppointment
+): PatientRecord {
+  return {
+    id: appointment.id || appointment._id || crypto.randomUUID(),
+    name:
+      appointment.patient?.name ||
+      appointment.patientName ||
+      "Unknown patient",
+    date: formatDate(
+      appointment.slot?.startTime ||
+        appointment.startTime ||
+        appointment.appointmentDate ||
+        appointment.createdAt
+    ),
+    specialty:
+      appointment.suggestedSpecialty ||
+      appointment.doctor?.specialty ||
+      appointment.specialty ||
+      "General Medicine",
+    status: getDisplayStatus(appointment),
+    notes: appointment.doctorNote || "No consultation notes added yet.",
+    symptoms: appointment.symptoms || "No symptoms provided.",
+  };
+}
 
 export default function Consultations() {
+  const { token } = useAuth();
+
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
-  const [selected, setSelected] = useState<(typeof patients)[number] | null>(
-    null
-  );
+  const [selected, setSelected] = useState<PatientRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      if (!token) {
+        setError("Please log in to view patient records.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(`${API_URL}/api/appointments`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.message || "Failed to load patient appointments."
+          );
+        }
+
+        const appointments: BackendAppointment[] = Array.isArray(data)
+          ? data
+          : data.appointments || [];
+
+        setPatients(appointments.map(mapAppointment));
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading appointments."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAppointments();
+  }, [token]);
 
   const filtered = useMemo(
     () =>
@@ -51,7 +167,7 @@ export default function Consultations() {
           patient.name.toLowerCase().includes(search.toLowerCase()) &&
           (status === "All" || patient.status === status)
       ),
-    [search, status]
+    [patients, search, status]
   );
 
   return (
@@ -89,6 +205,7 @@ export default function Consultations() {
           <option>Waiting</option>
           <option>In Consultation</option>
           <option>Completed</option>
+          <option>Cancelled</option>
         </select>
       </section>
 
@@ -99,13 +216,19 @@ export default function Consultations() {
           </h2>
         </div>
 
-        <div className="divide-y divide-gray-100">
-          {filtered.length === 0 ? (
-            <p className="p-8 text-center text-gray-500">
-              No patients found.
-            </p>
-          ) : (
-            filtered.map((patient) => (
+        {loading ? (
+          <p className="p-8 text-center text-gray-500">
+            Loading patient records...
+          </p>
+        ) : error ? (
+          <p className="p-8 text-center text-red-600">{error}</p>
+        ) : filtered.length === 0 ? (
+          <p className="p-8 text-center text-gray-500">
+            No patients found.
+          </p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filtered.map((patient) => (
               <div
                 key={patient.id}
                 className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
@@ -114,20 +237,27 @@ export default function Consultations() {
                   <div className="rounded-full bg-[#EAF3FC] p-3 text-[#299BCF]">
                     <UserRound size={21} />
                   </div>
+
                   <div>
                     <h3 className="font-semibold text-gray-900">
                       {patient.name}
                     </h3>
+
                     <p className="mt-1 text-sm text-gray-500">
                       {patient.specialty} · {patient.date}
                     </p>
-                    <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                      patient.status === "Completed"
-                        ? "bg-green-100 text-green-700"
-                        : patient.status === "In Consultation"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}>
+
+                    <span
+                      className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                        patient.status === "Completed"
+                          ? "bg-green-100 text-green-700"
+                          : patient.status === "In Consultation"
+                          ? "bg-blue-100 text-blue-700"
+                          : patient.status === "Cancelled"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
                       {patient.status}
                     </span>
                   </div>
@@ -141,9 +271,9 @@ export default function Consultations() {
                   View Details
                 </button>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {selected && (
@@ -152,18 +282,31 @@ export default function Consultations() {
             <h2 className="text-xl font-bold text-gray-900">
               Patient Details
             </h2>
+
             <p className="mt-4 text-sm text-gray-500">Patient name</p>
             <p className="font-semibold">{selected.name}</p>
+
             <p className="mt-3 text-sm text-gray-500">Appointment date</p>
             <p className="font-medium">{selected.date}</p>
+
+            <p className="mt-3 text-sm text-gray-500">Specialty</p>
+            <p className="font-medium">{selected.specialty}</p>
+
             <p className="mt-3 text-sm text-gray-500">Status</p>
             <p className="font-medium">{selected.status}</p>
+
+            <p className="mt-3 text-sm text-gray-500">Symptoms / Reason for visit</p>
+            <p className="mt-1 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+              {selected.symptoms}
+            </p>
+
             <p className="mt-3 text-sm text-gray-500">
-              Example consultation note
+              Consultation notes
             </p>
             <p className="mt-1 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
               {selected.notes}
             </p>
+
             <button
               onClick={() => setSelected(null)}
               className="mt-6 w-full rounded-xl bg-[#299BCF] px-4 py-3 font-semibold text-white hover:bg-[#2187B5]"

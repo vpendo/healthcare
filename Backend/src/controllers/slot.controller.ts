@@ -1,3 +1,4 @@
+
 import type { Request, Response } from "express";
 import { z } from "zod";
 import mongoose from "mongoose";
@@ -58,16 +59,28 @@ const updateSlotSchema = z
   );
 
 // ---------------------------------------------------------------------------
+// Helper Functions
+// ---------------------------------------------------------------------------
+
+function canManageSlots(role: string): boolean {
+  return ["doctor", "receptionist", "admin"].includes(role);
+}
+
+// ---------------------------------------------------------------------------
 // Controllers
 // ---------------------------------------------------------------------------
 
 /**
  * POST /api/slots
  * Creates a new availability slot.
- * Access: Doctor (for self) or Receptionist/Admin (for any doctor).
+ * Access: Doctor (for self), Receptionist or Admin (for any doctor).
  */
-export async function createSlot(req: Request, res: Response): Promise<void> {
+export async function createSlot(
+  req: Request,
+  res: Response
+): Promise<void> {
   const parsed = createSlotSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -77,10 +90,21 @@ export async function createSlot(req: Request, res: Response): Promise<void> {
   }
 
   const currentUser = req.user!;
+
+  if (!canManageSlots(currentUser.role)) {
+    res.status(403).json({
+      message: "You are not allowed to create availability slots.",
+    });
+    return;
+  }
+
   let targetDoctorId = currentUser.sub;
 
-  // Receptionist or admin can specify target doctorId
-  if (currentUser.role === "receptionist" || currentUser.role === "admin") {
+  // Receptionist and admin must specify the doctor.
+  if (
+    currentUser.role === "receptionist" ||
+    currentUser.role === "admin"
+  ) {
     if (!parsed.data.doctorId) {
       res.status(400).json({
         message:
@@ -88,7 +112,20 @@ export async function createSlot(req: Request, res: Response): Promise<void> {
       });
       return;
     }
+
     targetDoctorId = parsed.data.doctorId;
+  }
+
+  // Doctors cannot create slots for another doctor.
+  if (
+    currentUser.role === "doctor" &&
+    parsed.data.doctorId &&
+    parsed.data.doctorId !== currentUser.sub
+  ) {
+    res.status(403).json({
+      message: "You can only create availability for yourself.",
+    });
+    return;
   }
 
   if (!mongoose.Types.ObjectId.isValid(targetDoctorId)) {
@@ -96,8 +133,8 @@ export async function createSlot(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Verify the target user exists and has doctor role
   const doctor = await User.findById(targetDoctorId).lean();
+
   if (!doctor) {
     res.status(404).json({ message: "Doctor not found." });
     return;
@@ -114,7 +151,7 @@ export async function createSlot(req: Request, res: Response): Promise<void> {
   const start = new Date(parsed.data.startTime);
   const end = new Date(parsed.data.endTime);
 
-  // Check for overlapping slots for the same doctor
+  // Prevent overlapping slots for the same doctor.
   const hasOverlap = await AvailabilitySlot.findOne({
     doctorId: targetDoctorId,
     startTime: { $lt: end },
@@ -155,59 +192,87 @@ export async function createSlot(req: Request, res: Response): Promise<void> {
  * Lists availability slots with optional filters:
  * ?doctorId=...
  * ?date=YYYY-MM-DD
- * ?startDate=... & ?endDate=...
+ * ?startDate=...&endDate=...
  * ?status=open|booked|unavailable
- * Access: Authenticated users (Patient, Doctor, Receptionist, Admin).
+ *
+ * Doctors automatically see only their own slots.
+ * Other authenticated users can use filters.
  */
-export async function getSlots(req: Request, res: Response): Promise<void> {
+export async function getSlots(
+  req: Request,
+  res: Response
+): Promise<void> {
   const { doctorId, date, startDate, endDate, status } = req.query;
 
   const filter: Record<string, unknown> = {};
 
-  if (doctorId && typeof doctorId === "string") {
+  // Doctors can only view their own availability.
+  if (req.user?.role === "doctor") {
+    filter.doctorId = req.user.sub;
+  } else if (doctorId && typeof doctorId === "string") {
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       res.status(400).json({ message: "Invalid doctor ID format." });
       return;
     }
+
     filter.doctorId = doctorId;
   }
 
-  // Filter by single date (YYYY-MM-DD)
+  // Filter by a single date.
   if (date && typeof date === "string") {
     const dayStart = new Date(`${date}T00:00:00.000Z`);
     const dayEnd = new Date(`${date}T23:59:59.999Z`);
 
     if (isNaN(dayStart.getTime())) {
-      res
-        .status(400)
-        .json({ message: "Invalid date format. Expected YYYY-MM-DD." });
+      res.status(400).json({
+        message: "Invalid date format. Expected YYYY-MM-DD.",
+      });
       return;
     }
 
-    filter.startTime = { $gte: dayStart, $lte: dayEnd };
+    filter.startTime = {
+      $gte: dayStart,
+      $lte: dayEnd,
+    };
   } else if (startDate || endDate) {
-    // Filter by date range
     const timeFilter: Record<string, Date> = {};
+
     if (startDate && typeof startDate === "string") {
-      const s = new Date(startDate);
-      if (!isNaN(s.getTime())) timeFilter.$gte = s;
+      const start = new Date(startDate);
+
+      if (isNaN(start.getTime())) {
+        res.status(400).json({ message: "Invalid startDate." });
+        return;
+      }
+
+      timeFilter.$gte = start;
     }
+
     if (endDate && typeof endDate === "string") {
-      const e = new Date(endDate);
-      if (!isNaN(e.getTime())) timeFilter.$lte = e;
+      const end = new Date(endDate);
+
+      if (isNaN(end.getTime())) {
+        res.status(400).json({ message: "Invalid endDate." });
+        return;
+      }
+
+      timeFilter.$lte = end;
     }
+
     if (Object.keys(timeFilter).length > 0) {
       filter.startTime = timeFilter;
     }
   }
 
-  // Filter by status
+  // Filter by status.
   if (status && typeof status === "string") {
-    if (["open", "booked", "unavailable"].includes(status)) {
-      filter.status = status;
+    if (!["open", "booked", "unavailable"].includes(status)) {
+      res.status(400).json({ message: "Invalid slot status." });
+      return;
     }
+
+    filter.status = status;
   } else if (req.user?.role === "patient") {
-    // By default, patients only see open slots unless explicitly asked
     filter.status = "open";
   }
 
@@ -224,16 +289,17 @@ export async function getSlots(req: Request, res: Response): Promise<void> {
     .lean();
 
   const formatted = slots
-    .filter((s) => s.doctorId != null)
-    .map((s) => ({
-      id: s._id,
-      doctorId: s.doctorId._id,
-      doctorName: s.doctorId.name,
-      doctorEmail: s.doctorId.email,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      status: s.status,
-      createdAt: s.createdAt,
+    .filter((slot) => slot.doctorId != null)
+    .map((slot) => ({
+      id: slot._id,
+      doctorId: slot.doctorId._id,
+      doctorName: slot.doctorId.name,
+      doctorEmail: slot.doctorId.email,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      status: slot.status,
+      createdAt: slot.createdAt,
+      updatedAt: slot.updatedAt,
     }));
 
   res.status(200).json({
@@ -247,7 +313,10 @@ export async function getSlots(req: Request, res: Response): Promise<void> {
  * Retrieves a single availability slot by ID.
  * Access: Authenticated users.
  */
-export async function getSlotById(req: Request, res: Response): Promise<void> {
+export async function getSlotById(
+  req: Request,
+  res: Response
+): Promise<void> {
   const { slotId } = req.params;
 
   if (
@@ -271,7 +340,20 @@ export async function getSlotById(req: Request, res: Response): Promise<void> {
     .lean();
 
   if (!slot || !slot.doctorId) {
-    res.status(404).json({ message: "Availability slot not found." });
+    res.status(404).json({
+      message: "Availability slot not found.",
+    });
+    return;
+  }
+
+  // Doctors can only view their own slots.
+  if (
+    req.user?.role === "doctor" &&
+    slot.doctorId._id.toString() !== req.user.sub
+  ) {
+    res.status(403).json({
+      message: "You are only allowed to view your own slots.",
+    });
     return;
   }
 
@@ -292,10 +374,13 @@ export async function getSlotById(req: Request, res: Response): Promise<void> {
 
 /**
  * PATCH /api/slots/:slotId
- * Updates slot status (e.g. open <-> unavailable) or timing.
- * Access: Doctor (own slot), Receptionist, Admin.
+ * Updates a slot's date, time or status.
+ * Access: Doctor (own slot), Receptionist or Admin.
  */
-export async function updateSlot(req: Request, res: Response): Promise<void> {
+export async function updateSlot(
+  req: Request,
+  res: Response
+): Promise<void> {
   const { slotId } = req.params;
 
   if (
@@ -307,7 +392,17 @@ export async function updateSlot(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const currentUser = req.user!;
+
+  if (!canManageSlots(currentUser.role)) {
+    res.status(403).json({
+      message: "You are not allowed to update availability slots.",
+    });
+    return;
+  }
+
   const parsed = updateSlotSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -317,52 +412,71 @@ export async function updateSlot(req: Request, res: Response): Promise<void> {
   }
 
   const slot = await AvailabilitySlot.findById(slotId);
+
   if (!slot) {
-    res.status(404).json({ message: "Availability slot not found." });
+    res.status(404).json({
+      message: "Availability slot not found.",
+    });
     return;
   }
 
-  const currentUser = req.user!;
-
-  // A doctor can only update their own slot
+  // A doctor can only update their own slot.
   if (
     currentUser.role === "doctor" &&
     slot.doctorId.toString() !== currentUser.sub
   ) {
     res.status(403).json({
-      message: "Forbidden: You are only allowed to update your own slots.",
+      message: "You are only allowed to update your own slots.",
     });
     return;
   }
 
-  // Cannot modify a slot that is already booked directly
+  // Booked slots cannot be modified.
   if (slot.status === "booked") {
     res.status(400).json({
       message:
-        "Cannot modify a booked slot directly. Please cancel the associated appointment first.",
+        "Cannot modify a booked slot. Cancel the associated appointment first.",
     });
     return;
   }
 
-  // Handle time updates
   const newStart = parsed.data.startTime
     ? new Date(parsed.data.startTime)
     : slot.startTime;
+
   const newEnd = parsed.data.endTime
     ? new Date(parsed.data.endTime)
     : slot.endTime;
 
   if (newStart >= newEnd) {
-    res.status(400).json({ message: "endTime must be after startTime." });
+    res.status(400).json({
+      message: "endTime must be after startTime.",
+    });
     return;
   }
 
-  // If time changed, check for overlaps with other slots
-  if (
-    (parsed.data.startTime &&
-      newStart.getTime() !== slot.startTime.getTime()) ||
-    (parsed.data.endTime && newEnd.getTime() !== slot.endTime.getTime())
-  ) {
+  // A newly selected start time cannot be in the past.
+  if (parsed.data.startTime && newStart <= new Date()) {
+    res.status(400).json({
+      message: "startTime cannot be in the past.",
+    });
+    return;
+  }
+
+  // A past slot cannot be reopened.
+  if (parsed.data.status === "open" && newStart <= new Date()) {
+    res.status(400).json({
+      message: "A past availability slot cannot be opened.",
+    });
+    return;
+  }
+
+  const timeChanged =
+    newStart.getTime() !== slot.startTime.getTime() ||
+    newEnd.getTime() !== slot.endTime.getTime();
+
+  if (timeChanged) {
+    // Prevent overlapping slots belonging to the same doctor.
     const overlap = await AvailabilitySlot.findOne({
       _id: { $ne: slot._id },
       doctorId: slot.doctorId,
@@ -400,6 +514,7 @@ export async function updateSlot(req: Request, res: Response): Promise<void> {
       startTime: slot.startTime,
       endTime: slot.endTime,
       status: slot.status,
+      createdAt: slot.createdAt,
       updatedAt: slot.updatedAt,
     },
   });
@@ -408,9 +523,12 @@ export async function updateSlot(req: Request, res: Response): Promise<void> {
 /**
  * DELETE /api/slots/:slotId
  * Deletes an unbooked availability slot.
- * Access: Doctor (own slot), Receptionist, Admin.
+ * Access: Doctor (own slot), Receptionist or Admin.
  */
-export async function deleteSlot(req: Request, res: Response): Promise<void> {
+export async function deleteSlot(
+  req: Request,
+  res: Response
+): Promise<void> {
   const { slotId } = req.params;
 
   if (
@@ -422,29 +540,40 @@ export async function deleteSlot(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const slot = await AvailabilitySlot.findById(slotId);
-  if (!slot) {
-    res.status(404).json({ message: "Availability slot not found." });
+  const currentUser = req.user!;
+
+  if (!canManageSlots(currentUser.role)) {
+    res.status(403).json({
+      message: "You are not allowed to delete availability slots.",
+    });
     return;
   }
 
-  const currentUser = req.user!;
+  const slot = await AvailabilitySlot.findById(slotId);
 
-  // Doctor can only delete their own slot
+  if (!slot) {
+    res.status(404).json({
+      message: "Availability slot not found.",
+    });
+    return;
+  }
+
+  // A doctor can only delete their own slot.
   if (
     currentUser.role === "doctor" &&
     slot.doctorId.toString() !== currentUser.sub
   ) {
     res.status(403).json({
-      message: "Forbidden: You are only allowed to delete your own slots.",
+      message: "You are only allowed to delete your own slots.",
     });
     return;
   }
 
-  // Cannot delete a booked slot
+  // Booked slots cannot be deleted.
   if (slot.status === "booked") {
     res.status(400).json({
-      message: "Cannot delete a booked slot. Cancel the appointment first.",
+      message:
+        "Cannot delete a booked slot. Cancel the associated appointment first.",
     });
     return;
   }
