@@ -1,4 +1,6 @@
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 // Public pages
 import Home from "./Pages/Home";
 import About from "./Pages/about";
@@ -12,6 +14,9 @@ import FindDoctor from "./Pages/FindDoctor";
 import GeneralConsultation from "./Pages/GeneralConsultation";
 import DentalCare from "./Pages/DentalCare";
 import OpticalCare from "./Pages/OpticalCare";
+
+// Admin
+import AdminDashboard from "./Pages/Admin/AdminDashboard";
 
 // Patient layout
 import Layout from "./Components/Patients/Layout";
@@ -33,10 +38,21 @@ import DoctorProfile from "./Pages/Doctors/DoctorProfile";
 import Consultations from "./Pages/Doctors/Consultations";
 import MySchedule from "./Pages/Doctors/MySchedule";
 
+// Receptionist layout
+import ReceptionistLayout from "./Components/Receptionist/Layout";
+
+// Receptionist pages
+import ReceptionistDashboard from "./Pages/Receptionist/ReceptionistDashboard";
+import TodaysQueue from "./Pages/Receptionist/TodaysQueue";
+import ReceptionistAppointments from "./Pages/Receptionist/Appointments";
+import PatientDetails from "./Pages/Receptionist/PatientDetails";
+import ManageSlots from "./Pages/Receptionist/ManageSlots";
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+
         {/* Public pages */}
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
@@ -60,14 +76,20 @@ export default function App() {
           element={<OpticalCare />}
         />
 
+        {/* Admin dashboard */}
+        <Route path="/admin" element={<AdminDashboard />} />
+
         {/* Patient dashboard */}
         <Route path="/patients" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="intake" element={<Intake />} />
           <Route path="book-appointment" element={<BookAppointment />} />
           <Route path="appointments" element={<MyAppointments />} />
-          <Route path="appointments/:appointmentId" element={<AppointmentDetails />} />
-          <Route path="profile" element={<Profile />} /> 
+          <Route
+            path="appointments/:appointmentId"
+            element={<AppointmentDetails />}
+          />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         {/* Doctor dashboard */}
@@ -77,6 +99,19 @@ export default function App() {
           <Route path="consultations" element={<Consultations />} />
           <Route path="schedule" element={<MySchedule />} />
         </Route>
+
+        {/* Receptionist dashboard */}
+        <Route path="/receptionist" element={<ReceptionistLayout />}>
+          <Route index element={<ReceptionistDashboard />} />
+          <Route path="queue" element={<TodaysQueue />} />
+          <Route
+            path="appointments"
+            element={<ReceptionistAppointments />}
+          />
+          <Route path="patients" element={<PatientDetails />} />
+          <Route path="slots" element={<ManageSlots />} />
+        </Route>
+
       </Routes>
     </BrowserRouter>
   );
