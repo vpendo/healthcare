@@ -1,3 +1,5 @@
+
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   CalendarPlus,
@@ -5,51 +7,167 @@ import {
   ArrowRight,
   HeartPulse,
   CheckCircle2,
-  XCircle,
   ClipboardList,
+  Loader2,
+  AlertCircle,
+  Stethoscope,
+  RefreshCw,
 } from "lucide-react";
-
 import { Link } from "react-router-dom";
+import { useAuth } from "../../Context/AuthContext";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
 
 interface Appointment {
-  id: number;
-  initials: string;
-  doctor: string;
-  specialty: string;
-  date: string;
-  time: string;
-  status: "Booked" | "Completed" | "Cancelled";
+  id: string;
+  status: "booked" | "completed" | "cancelled";
+  symptoms?: string;
+  suggestedSpecialty?: string;
+  urgent?: boolean;
+  doctor?: {
+    name?: string;
+    email?: string;
+    specialty?: string;
+  };
+  slot?: {
+    id?: string;
+    startTime?: string;
+    endTime?: string;
+  };
+  createdAt?: string;
 }
 
-const appointments: Appointment[] = [
-  {
-    id: 1,
-    initials: "AU",
-    doctor: "Dr. Alice Uwimana",
-    specialty: "General Practice",
-    date: "Nov 03, 2026",
-    time: "10:00 AM",
-    status: "Booked",
-  },
-  {
-    id: 2,
-    initials: "JN",
-    doctor: "Dr. Jean Niyonkuru",
-    specialty: "Cardiology",
-    date: "Nov 09, 2026",
-    time: "02:30 PM",
-    status: "Booked",
-  },
-];
+interface AppointmentsResponse {
+  count: number;
+  appointments: Appointment[];
+}
 
 export default function MyAppointments() {
+  const { token, loading: authLoading } = useAuth();
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const fetchAppointments = async () => {
+    if (!token) return;
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(`${API_URL}/api/appointments/my`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Unable to load your appointments."
+        );
+      }
+
+      const result: AppointmentsResponse = data;
+
+      setAppointments(
+        Array.isArray(result.appointments) ? result.appointments : []
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!token) {
+      setError("Please log in to view your appointments.");
+      setLoading(false);
+      return;
+    }
+
+    fetchAppointments();
+  }, [token, authLoading]);
+
   const upcomingCount = appointments.filter(
-    (appointment) => appointment.status === "Booked"
+    (appointment) => appointment.status === "booked"
   ).length;
 
   const completedCount = appointments.filter(
-    (appointment) => appointment.status === "Completed"
+    (appointment) => appointment.status === "completed"
   ).length;
+
+  const formatDate = (date?: string) => {
+    if (!date) return "Date unavailable";
+
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (date?: string) => {
+    if (!date) return "Time unavailable";
+
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const getStatusLabel = (status: Appointment["status"]) => {
+    switch (status) {
+      case "booked":
+        return "Booked";
+      case "completed":
+        return "Completed";
+      case "cancelled":
+        return "Cancelled";
+      default:
+        return status;
+    }
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return "DR";
+
+    return name
+      .replace(/^Dr\.?\s*/i, "")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join("");
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center bg-[#F1F8FD]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={35} className="animate-spin text-[#299BCF]" />
+          <p className="text-sm text-slate-500">
+            Loading your appointments...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F1F8FD] p-4 sm:p-6 lg:p-8">
@@ -79,6 +197,27 @@ export default function MyAppointments() {
             Book Appointment
           </Link>
         </section>
+
+        {/* Error Message */}
+        {error && (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="mt-0.5 shrink-0 text-red-500" />
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+
+            <button
+              onClick={fetchAppointments}
+              className="inline-flex items-center gap-2 self-start text-sm font-semibold text-red-600 hover:text-red-700"
+            >
+              <RefreshCw size={15} />
+              Try again
+            </button>
+          </div>
+        )}
 
         {/* Appointment Statistics */}
         <section
@@ -135,96 +274,106 @@ export default function MyAppointments() {
 
             <div>
               <h2 className="text-lg font-bold text-slate-900">
-                Upcoming Visits
+                My Visits
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Your scheduled appointments.
+                Your scheduled and previous appointments.
               </p>
             </div>
           </div>
 
           {appointments.length > 0 ? (
             <div className="divide-y divide-[#EAF3FC]">
-              {appointments.map((appointment) => (
-                <article
-                  key={appointment.id}
-                  className="flex flex-col gap-5 p-5 transition hover:bg-[#F1F8FD] sm:p-6 lg:flex-row lg:items-center"
-                >
-                  {/* Doctor Information */}
-                  <div className="flex min-w-0 flex-1 items-center gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#EAF3FC] text-lg font-bold text-[#299BCF]">
-                      {appointment.initials}
+              {appointments.map((appointment) => {
+                const doctorName =
+                  appointment.doctor?.name || "Assigned Doctor";
+
+                const specialty =
+                  appointment.doctor?.specialty ||
+                  appointment.suggestedSpecialty ||
+                  "Medical Consultation";
+
+                return (
+                  <article
+                    key={appointment.id}
+                    className="flex flex-col gap-5 p-5 transition hover:bg-[#F1F8FD] sm:p-6 lg:flex-row lg:items-center"
+                  >
+                    {/* Doctor Information */}
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#EAF3FC] text-lg font-bold text-[#299BCF]">
+                        {getInitials(doctorName)}
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-slate-900">
+                          {doctorName}
+                        </h3>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          {specialty}
+                        </p>
+
+                        <span className="mt-2 inline-flex rounded-lg bg-[#EAF3FC] px-2.5 py-1 text-xs font-medium text-[#299BCF]">
+                          {specialty}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-slate-900">
-                        {appointment.doctor}
-                      </h3>
+                    {/* Date and Time */}
+                    <div className="flex flex-wrap gap-x-5 gap-y-3 lg:w-56 lg:flex-col lg:gap-3">
+                      <span className="flex items-center gap-2 text-sm text-slate-600">
+                        <CalendarDays
+                          size={17}
+                          className="shrink-0 text-[#299BCF]"
+                        />
+                        {formatDate(appointment.slot?.startTime)}
+                      </span>
 
-                      <p className="mt-1 text-sm text-slate-500">
-                        {appointment.specialty}
-                      </p>
-
-                      <span className="mt-2 inline-flex rounded-lg bg-[#EAF3FC] px-2.5 py-1 text-xs font-medium text-[#299BCF]">
-                        {appointment.specialty}
+                      <span className="flex items-center gap-2 text-sm text-slate-600">
+                        <Clock3
+                          size={17}
+                          className="shrink-0 text-[#299BCF]"
+                        />
+                        {formatTime(appointment.slot?.startTime)}
                       </span>
                     </div>
-                  </div>
 
-                  {/* Date and Time */}
-                  <div className="flex flex-wrap gap-x-5 gap-y-3 lg:w-56 lg:flex-col lg:gap-3">
-                    <span className="flex items-center gap-2 text-sm text-slate-600">
-                      <CalendarDays
-                        size={17}
-                        className="shrink-0 text-[#299BCF]"
-                      />
-                      {appointment.date}
-                    </span>
-
-                    <span className="flex items-center gap-2 text-sm text-slate-600">
-                      <Clock3
-                        size={17}
-                        className="shrink-0 text-[#299BCF]"
-                      />
-                      {appointment.time}
-                    </span>
-                  </div>
-
-                  {/* Appointment Status */}
-                  <div className="flex items-center justify-between gap-3 lg:w-36">
-                    <span
-                      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                        appointment.status === "Booked"
-                          ? "bg-[#EAF3FC] text-[#299BCF]"
-                          : appointment.status === "Completed"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-red-50 text-[#E51E2A]"
-                      }`}
-                    >
+                    {/* Appointment Status */}
+                    <div className="flex items-center justify-between gap-3 lg:w-36">
                       <span
-                        className={`h-2 w-2 rounded-full ${
-                          appointment.status === "Booked"
-                            ? "bg-[#55B9E8]"
-                            : appointment.status === "Completed"
-                              ? "bg-green-500"
-                              : "bg-[#E51E2A]"
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                          appointment.status === "booked"
+                            ? "bg-[#EAF3FC] text-[#299BCF]"
+                            : appointment.status === "completed"
+                              ? "bg-green-50 text-green-700"
+                              : "bg-red-50 text-[#E51E2A]"
                         }`}
-                      />
+                      >
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            appointment.status === "booked"
+                              ? "bg-[#55B9E8]"
+                              : appointment.status === "completed"
+                                ? "bg-green-500"
+                                : "bg-[#E51E2A]"
+                          }`}
+                        />
 
-                      {appointment.status}
-                    </span>
+                        {getStatusLabel(appointment.status)}
+                      </span>
 
-                    <Link
-                      to="/dashboard/appointments"
-                      aria-label={`View ${appointment.doctor}'s appointment`}
-                      className="rounded-lg p-2 text-[#299BCF] transition hover:bg-[#EAF3FC]"
-                    >
-                      <ArrowRight size={18} />
-                    </Link>
-                  </div>
-                </article>
-              ))}
+                      <Link
+                        to={`/dashboard/appointments/${appointment.id}`}
+                        aria-label={`View ${doctorName}'s appointment`}
+                        className="rounded-lg p-2 text-[#299BCF] transition hover:bg-[#EAF3FC]"
+                      >
+                        <ArrowRight size={18} />
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           ) : (
             <div className="px-5 py-14 text-center">
@@ -253,8 +402,7 @@ export default function MyAppointments() {
 
           <div className="border-t border-[#EAF3FC] bg-[#F1F8FD] px-5 py-4 sm:px-6">
             <p className="text-xs leading-5 text-slate-500">
-              Frontend preview: appointment records are sample data.
-              Connect your API when backend integration is required.
+              Your appointment information is retrieved securely from FamCare.
             </p>
           </div>
         </section>

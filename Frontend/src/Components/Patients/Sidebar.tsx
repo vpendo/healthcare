@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   CalendarRange,
@@ -13,6 +12,7 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react";
+import { useAuth } from "../../Context/AuthContext";
 
 interface NavigationItem {
   to: string;
@@ -79,9 +79,22 @@ function FamCareLogo() {
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   function closeMenu() {
     setOpen(false);
+  }
+
+  async function handleLogout() {
+    closeMenu();
+
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   }
 
   return (
@@ -189,14 +202,14 @@ export default function Sidebar() {
 
         {/* Logout */}
         <div className="border-t border-[#D7E8F5] p-4">
-          <NavLink
-            to="/"
-            onClick={closeMenu}
-            className="flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-semibold text-[#E51E2A] transition hover:bg-red-50 hover:text-[#C91824]"
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left text-sm font-semibold text-[#E51E2A] transition hover:bg-red-50 hover:text-[#C91824]"
           >
             <LogOut size={19} />
             <span className="flex-1">Logout</span>
-          </NavLink>
+          </button>
 
           <p className="mt-3 text-center text-xs text-slate-400">
             FamCare Patient Portal

@@ -1,3 +1,4 @@
+
 import {
   HeartPulse,
   Mail,
@@ -6,10 +7,27 @@ import {
   Settings,
   CalendarDays,
   ChevronRight,
-  Pencil,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../Context/AuthContext";
 
 export default function Profile() {
+  const { user } = useAuth();
+
+  const fullName = user?.name || "Name unavailable";
+  const email = user?.email || "Email unavailable";
+
+  const role = user?.role
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    : "Patient";
+
+  const initials = fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
   return (
     <div className="min-h-screen bg-[#F1F8FD] p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -25,7 +43,7 @@ export default function Profile() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
-            Manage your personal information and account settings.
+            View your personal information and account details.
           </p>
         </div>
 
@@ -37,35 +55,24 @@ export default function Profile() {
 
             {/* Profile Header */}
             <div className="flex flex-col gap-4 border-b border-[#EAF3FC] p-5 sm:flex-row sm:items-center sm:p-6">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#EAF3FC] text-[#299BCF]">
-                <UserRound size={32} />
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#EAF3FC] text-xl font-bold text-[#299BCF]">
+                {initials || <UserRound size={32} />}
               </div>
 
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-slate-900">
-                  Patient Profile
+                  {fullName}
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Your personal account information.
+                  {email}
                 </p>
 
                 <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#EAF3FC] px-3 py-1 text-xs font-semibold text-[#299BCF]">
                   <ShieldCheck size={14} />
-                  Patient Account
+                  {role} Account
                 </span>
               </div>
-
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#299BCF] px-4 py-2.5 text-sm font-semibold text-[#299BCF] transition hover:bg-[#EAF3FC]"
-                onClick={() =>
-                  alert("Profile editing will be available soon.")
-                }
-              >
-                <Pencil size={16} />
-                Edit Profile
-              </button>
             </div>
 
             {/* Account Details */}
@@ -74,6 +81,7 @@ export default function Profile() {
                 Personal Information
               </h3>
 
+              {/* Full Name */}
               <div className="flex items-center gap-4 rounded-xl p-4 transition hover:bg-[#F1F8FD]">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#299BCF]">
                   <UserRound size={21} />
@@ -83,12 +91,14 @@ export default function Profile() {
                   <p className="text-xs font-medium text-slate-500">
                     Full Name
                   </p>
+
                   <p className="mt-1 text-sm font-semibold text-slate-800">
-                    Not provided
+                    {fullName}
                   </p>
                 </div>
               </div>
 
+              {/* Email */}
               <div className="flex items-center gap-4 rounded-xl p-4 transition hover:bg-[#F1F8FD]">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#299BCF]">
                   <Mail size={21} />
@@ -98,12 +108,14 @@ export default function Profile() {
                   <p className="text-xs font-medium text-slate-500">
                     Email Address
                   </p>
+
                   <p className="mt-1 break-all text-sm font-semibold text-slate-800">
-                    Not provided
+                    {email}
                   </p>
                 </div>
               </div>
 
+              {/* Account Type */}
               <div className="flex items-center gap-4 rounded-xl p-4 transition hover:bg-[#F1F8FD]">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EAF3FC] text-[#299BCF]">
                   <HeartPulse size={21} />
@@ -113,8 +125,9 @@ export default function Profile() {
                   <p className="text-xs font-medium text-slate-500">
                     Account Type
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">
-                    Patient
+
+                  <p className="mt-1 text-sm font-semibold capitalize text-slate-800">
+                    {user?.role || "patient"}
                   </p>
                 </div>
               </div>
@@ -126,32 +139,26 @@ export default function Profile() {
                 Account Settings
               </h3>
 
-              <button
-                type="button"
-                onClick={() =>
-                  alert("Account settings will be available soon.")
-                }
-                className="flex w-full items-center gap-3 rounded-xl p-4 text-left transition hover:bg-[#F1F8FD]"
-              >
+              <div className="flex items-center gap-3 rounded-xl p-4">
                 <Settings size={20} className="text-[#299BCF]" />
 
                 <span className="flex-1">
                   <span className="block text-sm font-semibold text-slate-800">
                     Account preferences
                   </span>
+
                   <span className="mt-1 block text-xs text-slate-500">
                     Manage your account settings.
                   </span>
                 </span>
 
-                <ChevronRight size={18} className="text-slate-400" />
-              </button>
+                <span className="rounded-full bg-[#EAF3FC] px-3 py-1 text-xs font-medium text-[#299BCF]">
+                  Coming soon
+                </span>
+              </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  alert("Appointment history will be available soon.")
-                }
+              <Link
+                to="/dashboard/appointments"
                 className="flex w-full items-center gap-3 rounded-xl p-4 text-left transition hover:bg-[#F1F8FD]"
               >
                 <CalendarDays size={20} className="text-[#299BCF]" />
@@ -160,13 +167,14 @@ export default function Profile() {
                   <span className="block text-sm font-semibold text-slate-800">
                     Appointment history
                   </span>
+
                   <span className="mt-1 block text-xs text-slate-500">
                     Review your scheduled and completed visits.
                   </span>
                 </span>
 
                 <ChevronRight size={18} className="text-slate-400" />
-              </button>
+              </Link>
             </div>
           </section>
 
@@ -219,7 +227,7 @@ export default function Profile() {
               </div>
 
               <p className="text-center text-xs text-slate-400">
-                Frontend preview · Sample information
+                FamCare · Your healthcare companion
               </p>
             </div>
           </aside>
