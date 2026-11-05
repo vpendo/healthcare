@@ -1,9 +1,11 @@
+
 import { Router } from "express";
 import {
   register,
   login,
   logout,
   me,
+  updateProfile,
   createStaffAccount,
   forgotPassword,
   verifyResetCode,
@@ -108,18 +110,8 @@ router.post("/register", register);
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
  *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
  *       401:
  *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: Invalid email or password.
  */
 router.post("/login", login);
 
@@ -135,18 +127,8 @@ router.post("/login", login);
  *     responses:
  *       200:
  *         description: Logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: Logged out successfully.
  *       401:
  *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
  */
 router.post("/logout", authenticate, logout);
 
@@ -162,34 +144,59 @@ router.post("/logout", authenticate, logout);
  *     responses:
  *       200:
  *         description: User profile returned successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   $ref: '#/components/schemas/UserProfile'
  *       401:
  *         description: Missing or invalid token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
  *       404:
  *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
  */
 router.get("/me", authenticate, me);
+
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   patch:
+ *     summary: Update the current user's profile
+ *     description: Updates the authenticated user's name and email address. The user ID is obtained from the authentication token.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Jane Doe
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: jane@example.com
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing or invalid token
+ *       404:
+ *         description: User not found
+ *       409:
+ *         description: Email already in use
+ */
+router.patch("/profile", authenticate, updateProfile);
 
 /**
  * @swagger
  * /api/auth/staff:
  *   post:
  *     summary: Create a doctor or receptionist account
- *     description: Admin only. Creates a new staff account with the specified role (doctor or receptionist).
+ *     description: Admin only. Creates a new staff account with the specified role.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -228,7 +235,7 @@ router.get("/me", authenticate, me);
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Forbidden - Admin access required
+ *         description: Admin access required
  *       409:
  *         description: Email already in use
  */
@@ -257,18 +264,8 @@ router.post("/staff", authenticate, requireRole("admin"), createStaffAccount);
  *     responses:
  *       200:
  *         description: Generic acknowledgement
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: If an account exists for this email, a reset code has been sent.
  *       400:
  *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
  */
 router.post("/forgot-password", forgotPassword);
 
@@ -300,20 +297,8 @@ router.post("/forgot-password", forgotPassword);
  *     responses:
  *       200:
  *         description: Reset code is valid
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: Reset code is valid.
  *       400:
- *         description: Validation error or invalid/expired code
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: Invalid or expired reset code.
+ *         description: Invalid or expired code
  */
 router.post("/verify-reset-code", verifyResetCode);
 
@@ -350,18 +335,8 @@ router.post("/verify-reset-code", verifyResetCode);
  *     responses:
  *       200:
  *         description: Password reset successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
- *             example:
- *               message: Password reset successfully. You can now log in.
  *       400:
  *         description: Validation error or invalid/expired code
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MessageResponse'
  */
 router.post("/reset-password", resetPassword);
 

@@ -1,3 +1,4 @@
+
 import type { Request, Response } from "express";
 import { z } from "zod";
 import mongoose from "mongoose";
@@ -37,6 +38,7 @@ export async function createDoctorProfile(
   res: Response
 ): Promise<void> {
   const parsed = createDoctorProfileSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -48,7 +50,7 @@ export async function createDoctorProfile(
   const currentUser = req.user!;
   let targetUserId = currentUser.sub;
 
-  // If an admin is creating the profile, they must supply the target doctor's userId
+  // If an admin is creating the profile, they must supply the target doctor's userId.
   if (currentUser.role === "admin") {
     if (!parsed.data.userId) {
       res.status(400).json({
@@ -56,6 +58,7 @@ export async function createDoctorProfile(
       });
       return;
     }
+
     targetUserId = parsed.data.userId;
   }
 
@@ -64,8 +67,9 @@ export async function createDoctorProfile(
     return;
   }
 
-  // Ensure the referenced user exists and has the 'doctor' role
+  // Ensure the referenced user exists and has the doctor role.
   const user = await User.findById(targetUserId).lean();
+
   if (!user) {
     res.status(404).json({ message: "User not found." });
     return;
@@ -78,14 +82,15 @@ export async function createDoctorProfile(
     return;
   }
 
-  // Check if this doctor already has a profile
+  // Check if this doctor already has a profile.
   const existingProfile = await DoctorProfile.findOne({
     userId: targetUserId,
   }).lean();
+
   if (existingProfile) {
-    res
-      .status(409)
-      .json({ message: "A doctor profile already exists for this doctor." });
+    res.status(409).json({
+      message: "A doctor profile already exists for this doctor.",
+    });
     return;
   }
 
@@ -110,14 +115,17 @@ export async function createDoctorProfile(
 /**
  * GET /api/doctors
  * Lists all doctor profiles, optionally filtered by ?specialty=...
- * Access: Authenticated users (patient, receptionist, doctor).
+ * Access: Authenticated users.
  */
-export async function getDoctors(req: Request, res: Response): Promise<void> {
+export async function getDoctors(
+  req: Request,
+  res: Response
+): Promise<void> {
   const specialtyQuery = req.query.specialty as string | undefined;
 
   const filter: Record<string, unknown> = {};
+
   if (specialtyQuery && specialtyQuery.trim().length > 0) {
-    // Case-insensitive regex match so partial searches like "general" or "pediatric" match
     filter.specialty = {
       $regex: new RegExp(specialtyQuery.trim().toLowerCase(), "i"),
     };
@@ -136,14 +144,14 @@ export async function getDoctors(req: Request, res: Response): Promise<void> {
     .lean();
 
   const formatted = profiles
-    .filter((p) => p.userId != null)
-    .map((p) => ({
-      id: p._id,
-      doctorId: p.userId._id,
-      name: p.userId.name,
-      email: p.userId.email,
-      specialty: p.specialty,
-      createdAt: p.createdAt,
+    .filter((profile) => profile.userId != null)
+    .map((profile) => ({
+      id: profile._id,
+      doctorId: profile.userId._id,
+      name: profile.userId.name,
+      email: profile.userId.email,
+      specialty: profile.specialty,
+      createdAt: profile.createdAt,
     }));
 
   res.status(200).json({
@@ -172,7 +180,6 @@ export async function getDoctorById(
     return;
   }
 
-  // Look up by doctorId (referencing users._id) or fallback by profile _id
   const profile = await DoctorProfile.findOne({
     $or: [{ userId: doctorId }, { _id: doctorId }],
   })
@@ -206,7 +213,7 @@ export async function getDoctorById(
 
 /**
  * PATCH /api/doctors/:doctorId
- * Updates doctor specialty.
+ * Updates doctor specialty or creates a missing doctor profile.
  * Access: Doctor (updating own profile) or Admin.
  */
 export async function updateDoctorProfile(
@@ -225,6 +232,7 @@ export async function updateDoctorProfile(
   }
 
   const parsed = updateDoctorProfileSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -235,20 +243,10 @@ export async function updateDoctorProfile(
 
   const currentUser = req.user!;
 
-  // Find existing profile
-  const profile = await DoctorProfile.findOne({
-    $or: [{ userId: doctorId }, { _id: doctorId }],
-  });
-
-  if (!profile) {
-    res.status(404).json({ message: "Doctor profile not found." });
-    return;
-  }
-
-  // If current user is a doctor, they can only update their own profile
+  // Doctors can only update their own profiles.
   if (
     currentUser.role === "doctor" &&
-    String(profile.userId) !== String(currentUser.sub)
+    String(currentUser.sub) !== doctorId
   ) {
     res.status(403).json({
       message: "Forbidden: You are only allowed to update your own profile.",
@@ -256,19 +254,48 @@ export async function updateDoctorProfile(
     return;
   }
 
-  profile.specialty = parsed.data.specialty.toLowerCase();
-  await profile.save();
+  // Confirm that the doctor account exists.
+  const user = await User.findById(doctorId);
 
-  const user = await User.findById(profile.userId).lean();
+  if (!user) {
+    res.status(404).json({ message: "Doctor account not found." });
+    return;
+  }
+
+  // Only users with the doctor role can have doctor profiles.
+  if (user.role !== "doctor") {
+    res.status(400).json({
+      message: "This account does not have the doctor role.",
+    });
+    return;
+  }
+
+  // Find the existing profile using the doctor's User ID.
+  let profile = await DoctorProfile.findOne({
+    userId: doctorId,
+  });
+
+  if (profile) {
+    // Update the existing profile.
+    profile.specialty = parsed.data.specialty.toLowerCase();
+    await profile.save();
+  } else {
+    // Create a profile if one does not already exist.
+    profile = await DoctorProfile.create({
+      userId: doctorId,
+      specialty: parsed.data.specialty.toLowerCase(),
+    });
+  }
 
   res.status(200).json({
     message: "Doctor profile updated successfully.",
     doctor: {
       id: profile._id,
-      doctorId: profile.userId,
-      name: user?.name,
-      email: user?.email,
+      doctorId: user._id,
+      name: user.name,
+      email: user.email,
       specialty: profile.specialty,
+      createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     },
   });

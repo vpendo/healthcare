@@ -1,3 +1,4 @@
+
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
@@ -21,6 +22,11 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+const updateProfileSchema = z.object({
+  name: z.string().min(1, "Name is required.").trim(),
+  email: z.string().email("Invalid email address.").toLowerCase().trim(),
+});
+
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address.").toLowerCase().trim(),
 });
@@ -40,8 +46,10 @@ const resetPasswordSchema = z.object({
 
 const SALT_ROUNDS = 12;
 const RESET_CODE_TTL_MS = 15 * 60 * 1000;
+
 const GENERIC_FORGOT_MESSAGE =
   "If an account exists for this email, a reset code has been sent.";
+
 const GENERIC_RESET_ERROR = "Invalid or expired reset code.";
 
 // ---------------------------------------------------------------------------
@@ -52,7 +60,6 @@ function signToken(userId: string, role: string): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not set.");
 
-  // expiresIn can be e.g. "7d" or "2h"; falls back to "1d"
   const expiresIn = (process.env.JWT_EXPIRES_IN ?? "1d") as string;
 
   return jwt.sign({ sub: userId, role }, secret, {
@@ -68,7 +75,9 @@ function hashResetCode(code: string): string {
 function resetCodesMatch(storedHash: string, code: string): boolean {
   const stored = Buffer.from(storedHash, "hex");
   const incoming = Buffer.from(hashResetCode(code), "hex");
+
   if (stored.length !== incoming.length) return false;
+
   return timingSafeEqual(stored, incoming);
 }
 
@@ -81,16 +90,16 @@ function escapeHtml(value: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Controllers
+// Authentication controllers
 // ---------------------------------------------------------------------------
 
 /**
  * POST /api/auth/register
  * Public. Registers a patient account.
- * Doctor / receptionist accounts are provisioned separately.
  */
 export async function register(req: Request, res: Response): Promise<void> {
   const parsed = registerSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -102,10 +111,11 @@ export async function register(req: Request, res: Response): Promise<void> {
   const { name, email, password } = parsed.data;
 
   const existing = await User.findOne({ email }).lean();
+
   if (existing) {
-    res
-      .status(409)
-      .json({ message: "An account with this email already exists." });
+    res.status(409).json({
+      message: "An account with this email already exists.",
+    });
     return;
   }
 
@@ -138,6 +148,7 @@ export async function register(req: Request, res: Response): Promise<void> {
  */
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = loginSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -148,18 +159,23 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const { email, password } = parsed.data;
 
-  // passwordHash is excluded from queries by default (select: false), so we
-  // explicitly re-include it here.
-  const user = await User.findOne({ email }).select("+passwordHash").lean();
+  const user = await User.findOne({ email })
+    .select("+passwordHash")
+    .lean();
+
   if (!user) {
-    // Generic message to avoid leaking which field is wrong
-    res.status(401).json({ message: "Invalid email or password." });
+    res.status(401).json({
+      message: "Invalid email or password.",
+    });
     return;
   }
 
   const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
   if (!passwordMatch) {
-    res.status(401).json({ message: "Invalid email or password." });
+    res.status(401).json({
+      message: "Invalid email or password.",
+    });
     return;
   }
 
@@ -179,12 +195,12 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 /**
  * POST /api/auth/logout
- * Authenticated. With Bearer tokens the client is responsible for discarding
- * the token. This endpoint signals that intent and can be extended with a
- * token-denylist if needed.
+ * Authenticated.
  */
 export function logout(_req: Request, res: Response): void {
-  res.status(200).json({ message: "Logged out successfully." });
+  res.status(200).json({
+    message: "Logged out successfully.",
+  });
 }
 
 /**
@@ -192,12 +208,14 @@ export function logout(_req: Request, res: Response): void {
  * Authenticated. Returns the current user's public profile.
  */
 export async function me(req: Request, res: Response): Promise<void> {
-  // req.user is guaranteed by the authenticate middleware
   const userId = req.user!.sub;
 
   const user = await User.findById(userId).lean();
+
   if (!user) {
-    res.status(404).json({ message: "User not found." });
+    res.status(404).json({
+      message: "User not found.",
+    });
     return;
   }
 
@@ -208,6 +226,65 @@ export async function me(req: Request, res: Response): Promise<void> {
       email: user.email,
       role: user.role,
       createdAt: user.createdAt,
+    },
+  });
+}
+
+/**
+ * PATCH /api/auth/profile
+ * Authenticated. Updates the current user's name and email.
+ */
+export async function updateProfile(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const parsed = updateProfileSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    res.status(400).json({
+      message: "Validation error.",
+      errors: parsed.error.flatten().fieldErrors,
+    });
+    return;
+  }
+
+  const userId = req.user!.sub;
+  const { name, email } = parsed.data;
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    res.status(404).json({
+      message: "User not found.",
+    });
+    return;
+  }
+
+  // Check whether another user already has this email.
+  const existingEmail = await User.findOne({
+    email,
+    _id: { $ne: userId },
+  }).lean();
+
+  if (existingEmail) {
+    res.status(409).json({
+      message: "An account with this email already exists.",
+    });
+    return;
+  }
+
+  user.name = name;
+  user.email = email;
+
+  await user.save();
+
+  res.status(200).json({
+    message: "Profile updated successfully.",
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
     },
   });
 }
@@ -234,6 +311,7 @@ export async function createStaffAccount(
   res: Response
 ): Promise<void> {
   const parsed = createStaffSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -245,16 +323,22 @@ export async function createStaffAccount(
   const { name, email, password, role } = parsed.data;
 
   const existing = await User.findOne({ email }).lean();
+
   if (existing) {
-    res
-      .status(409)
-      .json({ message: "An account with this email already exists." });
+    res.status(409).json({
+      message: "An account with this email already exists.",
+    });
     return;
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  const user = await User.create({ name, email, passwordHash, role });
+  const user = await User.create({
+    name,
+    email,
+    passwordHash,
+    role,
+  });
 
   res.status(201).json({
     message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created successfully.`,
@@ -268,16 +352,20 @@ export async function createStaffAccount(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Password reset controllers
+// ---------------------------------------------------------------------------
+
 /**
  * POST /api/auth/forgot-password
  * Public. Sends a 6-digit reset code if the email belongs to an account.
- * Always returns the same message so callers cannot probe for registered emails.
  */
 export async function forgotPassword(
   req: Request,
   res: Response
 ): Promise<void> {
   const parsed = forgotPasswordSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -291,12 +379,20 @@ export async function forgotPassword(
 
   if (user) {
     const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+
     const passwordResetCodeHash = hashResetCode(code);
-    const passwordResetExpires = new Date(Date.now() + RESET_CODE_TTL_MS);
+    const passwordResetExpires = new Date(
+      Date.now() + RESET_CODE_TTL_MS
+    );
 
     await User.updateOne(
       { _id: user._id },
-      { $set: { passwordResetCodeHash, passwordResetExpires } }
+      {
+        $set: {
+          passwordResetCodeHash,
+          passwordResetExpires,
+        },
+      }
     );
 
     try {
@@ -313,19 +409,21 @@ export async function forgotPassword(
     }
   }
 
-  res.status(200).json({ message: GENERIC_FORGOT_MESSAGE });
+  res.status(200).json({
+    message: GENERIC_FORGOT_MESSAGE,
+  });
 }
 
 /**
  * POST /api/auth/verify-reset-code
- * Public. Verifies whether a 6-digit reset code is valid and unexpired
- * without modifying the account. Useful for step-by-step UI flows.
+ * Public. Verifies whether a 6-digit reset code is valid and unexpired.
  */
 export async function verifyResetCode(
   req: Request,
   res: Response
 ): Promise<void> {
   const parsed = verifyResetCodeSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -344,8 +442,15 @@ export async function verifyResetCode(
   const expiresAt = user?.passwordResetExpires;
   const isExpired = !expiresAt || expiresAt.getTime() < Date.now();
 
-  if (!user || !storedHash || isExpired || !resetCodesMatch(storedHash, code)) {
-    res.status(400).json({ message: GENERIC_RESET_ERROR });
+  if (
+    !user ||
+    !storedHash ||
+    isExpired ||
+    !resetCodesMatch(storedHash, code)
+  ) {
+    res.status(400).json({
+      message: GENERIC_RESET_ERROR,
+    });
     return;
   }
 
@@ -356,13 +461,14 @@ export async function verifyResetCode(
 
 /**
  * POST /api/auth/reset-password
- * Public. Sets a new password when a valid, unexpired reset code is provided.
+ * Public. Sets a new password with a valid reset code.
  */
 export async function resetPassword(
   req: Request,
   res: Response
 ): Promise<void> {
   const parsed = resetPasswordSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({
       message: "Validation error.",
@@ -381,8 +487,15 @@ export async function resetPassword(
   const expiresAt = user?.passwordResetExpires;
   const isExpired = !expiresAt || expiresAt.getTime() < Date.now();
 
-  if (!user || !storedHash || isExpired || !resetCodesMatch(storedHash, code)) {
-    res.status(400).json({ message: GENERIC_RESET_ERROR });
+  if (
+    !user ||
+    !storedHash ||
+    isExpired ||
+    !resetCodesMatch(storedHash, code)
+  ) {
+    res.status(400).json({
+      message: GENERIC_RESET_ERROR,
+    });
     return;
   }
 
@@ -392,7 +505,10 @@ export async function resetPassword(
     { _id: user._id },
     {
       $set: { passwordHash },
-      $unset: { passwordResetCodeHash: 1, passwordResetExpires: 1 },
+      $unset: {
+        passwordResetCodeHash: 1,
+        passwordResetExpires: 1,
+      },
     }
   );
 
