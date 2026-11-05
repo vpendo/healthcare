@@ -5,6 +5,9 @@ import {
   logout,
   me,
   createStaffAccount,
+  forgotPassword,
+  verifyResetCode,
+  resetPassword,
 } from "../controllers/auth.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireRole } from "../middleware/role.middleware.js";
@@ -230,5 +233,136 @@ router.get("/me", authenticate, me);
  *         description: Email already in use
  */
 router.post("/staff", authenticate, requireRole("admin"), createStaffAccount);
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset code
+ *     description: If the email belongs to an account, a 6-digit code is emailed. The response is the same whether or not the email exists.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: jane@example.com
+ *     responses:
+ *       200:
+ *         description: Generic acknowledgement
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageResponse'
+ *             example:
+ *               message: If an account exists for this email, a reset code has been sent.
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ */
+router.post("/forgot-password", forgotPassword);
+
+/**
+ * @swagger
+ * /api/auth/verify-reset-code:
+ *   post:
+ *     summary: Verify a 6-digit password reset code
+ *     description: Checks whether a reset code is valid and unexpired without resetting the password.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: jane@example.com
+ *               code:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 example: "482193"
+ *     responses:
+ *       200:
+ *         description: Reset code is valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageResponse'
+ *             example:
+ *               message: Reset code is valid.
+ *       400:
+ *         description: Validation error or invalid/expired code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageResponse'
+ *             example:
+ *               message: Invalid or expired reset code.
+ */
+router.post("/verify-reset-code", verifyResetCode);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with a 6-digit code
+ *     description: Sets a new password when a valid, unexpired reset code is provided. The user must log in afterwards.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: jane@example.com
+ *               code:
+ *                 type: string
+ *                 pattern: '^[0-9]{6}$'
+ *                 example: "482193"
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: newSecurePass123
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageResponse'
+ *             example:
+ *               message: Password reset successfully. You can now log in.
+ *       400:
+ *         description: Validation error or invalid/expired code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MessageResponse'
+ */
+router.post("/reset-password", resetPassword);
 
 export default router;
