@@ -1,6 +1,6 @@
-
 import { Bell, ChevronDown } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../../Context/AuthContext";
 import Sidebar from "./Sidebar";
 
 function FamCareLogo() {
@@ -40,6 +40,21 @@ function FamCareLogo() {
 }
 
 export default function Layout() {
+  const { user } = useAuth();
+
+  const fullName = user?.name || "User";
+
+  const role = user?.role
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    : "Patient";
+
+  const initials = fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
   return (
     <div className="flex min-h-screen bg-[#F1F8FD] text-slate-800">
       <Sidebar />
@@ -68,32 +83,23 @@ export default function Layout() {
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E51E2A] ring-2 ring-white" />
           </button>
 
-          {/* Patient account */}
+          {/* User account */}
           <button
             type="button"
-            aria-label="Patient account"
+            aria-label="User account"
             className="flex items-center gap-2 rounded-xl p-2 transition hover:bg-[#F1F8FD] sm:gap-3"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EAF3FC] text-[#299BCF]">
-              <svg
-                viewBox="0 0 32 32"
-                className="h-6 w-6"
-                aria-hidden="true"
-              >
-                <path
-                  d="M16 28.5C6.5 21 2 15 2 9.8 2 5.8 5 3 8.7 3c3 0 5.9 1.6 7.3 4.2C17.4 4.6 20.3 3 23.3 3 27 3 30 5.8 30 9.8 30 15 25.5 21 16 28.5Z"
-                  fill="#55B9E8"
-                />
-                <rect x="14" y="8" width="4" height="14" rx="1" fill="#FFFFFF" />
-                <rect x="9" y="13" width="14" height="4" rx="1" fill="#FFFFFF" />
-              </svg>
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EAF3FC] text-sm font-bold text-[#299BCF]">
+              {initials || "U"}
             </span>
 
             <span className="hidden text-left sm:block">
-              <strong className="block text-sm font-semibold text-slate-800">
-                Patient
+              <strong className="block max-w-[150px] truncate text-sm font-semibold text-slate-800">
+                {fullName}
               </strong>
-              <span className="text-xs text-slate-500">My account</span>
+              <span className="text-xs capitalize text-slate-500">
+                {role}
+              </span>
             </span>
 
             <ChevronDown
