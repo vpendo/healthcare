@@ -1,8 +1,10 @@
+
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   CalendarRange,
+  ClipboardList,
   House,
   LogOut,
   Menu,
@@ -37,6 +39,11 @@ const navigation: NavigationItem[] = [
     to: "/patients/appointments",
     label: "My Appointments",
     icon: CalendarRange,
+  },
+  {
+    to: "/patients/visit-history",
+    label: "Visit History",
+    icon: ClipboardList,
   },
   { to: "/patients/profile", label: "Profile", icon: UserRound },
 ];
