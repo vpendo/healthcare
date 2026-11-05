@@ -1,7 +1,13 @@
+import { createHash } from "node:crypto";
 import request from "supertest";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import app from "../app.js";
 import { User } from "../models/User.js";
+
+function hashResetCode(code: string): string {
+  return createHash("sha256").update(code).digest("hex");
+}
 
 function createToken(
   userId: string,
@@ -141,6 +147,165 @@ describe("Auth Endpoints", () => {
         });
 
       expect(res.status).toBe(409);
+    });
+  });
+
+  describe("Password reset", () => {
+    const forgotMessage =
+      "If an account exists for this email, a reset code has been sent.";
+
+    it("should return a generic success for an unknown email", async () => {
+      const res = await request(app).post("/api/auth/forgot-password").send({
+        email: "missing@example.com",
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe(forgotMessage);
+    });
+
+    it("should store a hashed reset code for an existing account", async () => {
+      await User.create({
+        name: "Jane Doe",
+        email: "jane@example.com",
+        passwordHash: await bcrypt.hash("Password123!", 12),
+        role: "patient",
+      });
+
+      const res = await request(app).post("/api/auth/forgot-password").send({
+        email: "jane@example.com",
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe(forgotMessage);
+
+      const user = await User.findOne({ email: "jane@example.com" }).select(
+        "+passwordResetCodeHash +passwordResetExpires"
+      );
+
+      expect(user?.passwordResetCodeHash).toEqual(expect.any(String));
+      expect(user?.passwordResetCodeHash).toHaveLength(64);
+      expect(user?.passwordResetExpires?.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it("should reject an invalid email on forgot-password", async () => {
+      const res = await request(app).post("/api/auth/forgot-password").send({
+        email: "not-an-email",
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("should reject an invalid or expired reset code", async () => {
+      await User.create({
+        name: "Jane Doe",
+        email: "jane@example.com",
+        passwordHash: await bcrypt.hash("Password123!", 12),
+        role: "patient",
+        passwordResetCodeHash: hashResetCode("123456"),
+        passwordResetExpires: new Date(Date.now() - 60_000),
+      });
+
+      const expired = await request(app).post("/api/auth/reset-password").send({
+        email: "jane@example.com",
+        code: "123456",
+        newPassword: "NewPassword123!",
+      });
+      expect(expired.status).toBe(400);
+
+      await User.updateOne(
+        { email: "jane@example.com" },
+        {
+          $set: {
+            passwordResetCodeHash: hashResetCode("123456"),
+            passwordResetExpires: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        }
+      );
+
+      const wrongCode = await request(app)
+        .post("/api/auth/reset-password")
+        .send({
+          email: "jane@example.com",
+          code: "000000",
+          newPassword: "NewPassword123!",
+        });
+      expect(wrongCode.status).toBe(400);
+    });
+
+    it("should verify a reset code successfully without resetting the password", async () => {
+      await User.create({
+        name: "Jane Doe",
+        email: "jane@example.com",
+        passwordHash: await bcrypt.hash("Password123!", 12),
+        role: "patient",
+        passwordResetCodeHash: hashResetCode("654321"),
+        passwordResetExpires: new Date(Date.now() + 15 * 60 * 1000),
+      });
+
+      const invalidCodeRes = await request(app)
+        .post("/api/auth/verify-reset-code")
+        .send({
+          email: "jane@example.com",
+          code: "000000",
+        });
+      expect(invalidCodeRes.status).toBe(400);
+
+      const validCodeRes = await request(app)
+        .post("/api/auth/verify-reset-code")
+        .send({
+          email: "jane@example.com",
+          code: "654321",
+        });
+      expect(validCodeRes.status).toBe(200);
+      expect(validCodeRes.body.message).toBe("Reset code is valid.");
+
+      // Ensure code is still intact for the subsequent reset step
+      const user = await User.findOne({ email: "jane@example.com" }).select(
+        "+passwordResetCodeHash"
+      );
+      expect(user?.passwordResetCodeHash).toBeTruthy();
+    });
+
+    it("should reset the password and allow login with the new one", async () => {
+      const oldHash = await bcrypt.hash("Password123!", 12);
+      await User.create({
+        name: "Jane Doe",
+        email: "jane@example.com",
+        passwordHash: oldHash,
+        role: "patient",
+        passwordResetCodeHash: hashResetCode("482193"),
+        passwordResetExpires: new Date(Date.now() + 15 * 60 * 1000),
+      });
+
+      const res = await request(app).post("/api/auth/reset-password").send({
+        email: "jane@example.com",
+        code: "482193",
+        newPassword: "NewPassword123!",
+      });
+
+      expect(res.status).toBe(200);
+
+      const user = await User.findOne({ email: "jane@example.com" }).select(
+        "+passwordHash +passwordResetCodeHash +passwordResetExpires"
+      );
+      expect(user?.passwordResetCodeHash).toBeFalsy();
+      expect(user?.passwordResetExpires).toBeFalsy();
+      expect(await bcrypt.compare("NewPassword123!", user!.passwordHash)).toBe(
+        true
+      );
+
+      const oldLogin = await request(app).post("/api/auth/login").send({
+        email: "jane@example.com",
+        password: "Password123!",
+      });
+      expect(oldLogin.status).toBe(401);
+
+      const newLogin = await request(app).post("/api/auth/login").send({
+        email: "jane@example.com",
+        password: "NewPassword123!",
+      });
+      expect(newLogin.status).toBe(200);
+      expect(newLogin.body).toHaveProperty("token");
     });
   });
 });
