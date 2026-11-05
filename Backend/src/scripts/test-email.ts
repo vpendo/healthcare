@@ -6,8 +6,7 @@ async function main() {
 
   const apiKey = process.env.BREVO_API?.trim();
   const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim();
-  const targetEmail =
-    process.argv[2] || process.env.TEST_EMAIL || senderEmail;
+  const targetEmail = process.argv[2] || process.env.TEST_EMAIL || senderEmail;
 
   if (!apiKey) {
     console.error("Error: BREVO_API is not set in Backend/.env");
@@ -44,4 +43,3 @@ async function main() {
 }
 
 main();
-
