@@ -45,7 +45,11 @@ const navigation: NavigationItem[] = [
     label: "Visit History",
     icon: ClipboardList,
   },
-  { to: "/patients/profile", label: "Profile", icon: UserRound },
+  {
+    to: "/patients/profile",
+    label: "Profile",
+    icon: UserRound,
+  },
 ];
 
 function FamCareLogo() {
@@ -154,7 +158,7 @@ export default function Sidebar() {
 
           {navigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink
-              key={to}
+              key={label}
               to={to}
               end={end}
               onClick={closeMenu}

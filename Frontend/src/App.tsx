@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./Context/AuthContext";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -28,6 +29,7 @@ import Dashboard from "./Pages/Patients/userDashboard";
 import BookAppointment from "./Pages/Patients/BookAppointment";
 import MyAppointments from "./Pages/Patients/MyAppointments";
 import AppointmentDetails from "./Pages/Patients/AppointmentDetails";
+import VisitHistory from "./Pages/Patients/VisitHistory";
 import Profile from "./Pages/Patients/Profile";
 import Intake from "./Pages/Patients/Intake";
 
@@ -94,6 +96,7 @@ export default function App() {
                 path="appointments/:appointmentId"
                 element={<AppointmentDetails />}
               />
+              <Route path="visit-history" element={<VisitHistory />} />
               <Route path="profile" element={<Profile />} />
             </Route>
           </Route>

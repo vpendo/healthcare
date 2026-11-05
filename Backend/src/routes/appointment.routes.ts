@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import {
   bookAppointment,
@@ -6,6 +7,8 @@ import {
   getAppointmentById,
   cancelAppointment,
   updateDoctorNote,
+  updateAppointmentSymptoms,
+  rescheduleAppointment,
 } from "../controllers/appointment.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireRole } from "../middleware/role.middleware.js";
@@ -18,6 +21,10 @@ const router = Router();
  *   name: Appointments
  *   description: Patient appointments and booking management
  */
+
+// ---------------------------------------------------------------------------
+// Book appointment
+// ---------------------------------------------------------------------------
 
 /**
  * @swagger
@@ -40,27 +47,22 @@ const router = Router();
  *             properties:
  *               slotId:
  *                 type: string
- *                 description: Availability slot ID to reserve
  *                 example: 665f1a2b3c4d5e6f7a8b9c0d
  *               patientId:
  *                 type: string
- *                 description: Target patient user ID (required when booking as receptionist/admin)
+ *                 description: Required when booking as receptionist/admin
  *                 example: 665f1a2b3c4d5e6f7a8b9c0e
  *               symptoms:
  *                 type: string
- *                 description: Patient description of symptoms or reason for visit
  *                 example: "Persistent dry cough and mild fever for 3 days."
  *               suggestedSpecialty:
  *                 type: string
- *                 description: Optional specialty recommendation
  *                 example: "pulmonology"
  *               urgent:
  *                 type: boolean
- *                 description: Flag indicating clinical urgency
  *                 default: false
  *               aiSummary:
  *                 type: string
- *                 description: Optional triage summary from AI assistant
  *     responses:
  *       201:
  *         description: Appointment booked successfully
@@ -69,7 +71,7 @@ const router = Router();
  *       404:
  *         description: Slot or patient not found
  *       409:
- *         description: Slot is no longer available (double-booking prevented)
+ *         description: Slot is no longer available
  */
 router.post(
   "/",
@@ -78,12 +80,16 @@ router.post(
   bookAppointment
 );
 
+// ---------------------------------------------------------------------------
+// Get my appointments
+// ---------------------------------------------------------------------------
+
 /**
  * @swagger
  * /api/appointments/my:
  *   get:
  *     summary: Get my appointments
- *     description: Retrieve all appointments associated with the authenticated patient or doctor.
+ *     description: Retrieve appointments associated with the authenticated patient or doctor.
  *     tags: [Appointments]
  *     security:
  *       - bearerAuth: []
@@ -92,8 +98,19 @@ router.post(
  *         description: List of current user's appointments
  *       401:
  *         description: Not authenticated
+ *       403:
+ *         description: Only patients and doctors can access this endpoint
  */
-router.get("/my", authenticate, getMyAppointments);
+router.get(
+  "/my",
+  authenticate,
+  requireRole("patient", "doctor"),
+  getMyAppointments
+);
+
+// ---------------------------------------------------------------------------
+// List appointments
+// ---------------------------------------------------------------------------
 
 /**
  * @swagger
@@ -109,36 +126,31 @@ router.get("/my", authenticate, getMyAppointments);
  *         name: doctorId
  *         schema:
  *           type: string
- *         description: Filter appointments by doctor ID
  *       - in: query
  *         name: patientId
  *         schema:
  *           type: string
- *         description: Filter appointments by patient ID
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
  *           enum: [booked, cancelled, completed]
- *         description: Filter by appointment status
  *       - in: query
  *         name: queueStatus
  *         schema:
  *           type: string
  *           enum: [not_arrived, waiting, in_consultation, done]
- *         description: Filter by clinic queue status
  *       - in: query
  *         name: urgent
  *         schema:
  *           type: boolean
- *         description: Filter by urgency flag
  *     responses:
  *       200:
  *         description: Filtered list of appointments
  *       401:
  *         description: Not authenticated
  *       403:
- *         description: Forbidden - Insufficient permissions
+ *         description: Insufficient permissions
  */
 router.get(
   "/",
@@ -146,6 +158,109 @@ router.get(
   requireRole("doctor", "receptionist", "admin"),
   getAppointments
 );
+
+// ---------------------------------------------------------------------------
+// Update appointment symptoms
+// ---------------------------------------------------------------------------
+
+/**
+ * @swagger
+ * /api/appointments/{appointmentId}/symptoms:
+ *   patch:
+ *     summary: Update appointment symptoms
+ *     description: Allows a patient to update symptoms before arriving for their booked appointment. Previous AI summary and suggested specialty are cleared because they may no longer match the updated symptoms.
+ *     tags: [Appointments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - symptoms
+ *             properties:
+ *               symptoms:
+ *                 type: string
+ *                 example: "I have had a persistent headache and fever for two days."
+ *     responses:
+ *       200:
+ *         description: Symptoms updated successfully
+ *       400:
+ *         description: Validation error or appointment cannot be modified
+ *       403:
+ *         description: Not authorized to update this appointment
+ *       404:
+ *         description: Appointment not found
+ */
+router.patch(
+  "/:appointmentId/symptoms",
+  authenticate,
+  requireRole("patient"),
+  updateAppointmentSymptoms
+);
+
+// ---------------------------------------------------------------------------
+// Reschedule appointment
+// ---------------------------------------------------------------------------
+
+/**
+ * @swagger
+ * /api/appointments/{appointmentId}/reschedule:
+ *   patch:
+ *     summary: Reschedule an appointment
+ *     description: Allows a patient to select another available future slot with the same doctor before arriving. The old slot is reopened and the new slot is reserved.
+ *     tags: [Appointments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: appointmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - slotId
+ *             properties:
+ *               slotId:
+ *                 type: string
+ *                 description: ID of the new available slot
+ *                 example: 665f1a2b3c4d5e6f7a8b9c0d
+ *     responses:
+ *       200:
+ *         description: Appointment rescheduled successfully
+ *       400:
+ *         description: Invalid slot or appointment cannot be modified
+ *       403:
+ *         description: Not authorized to reschedule this appointment
+ *       404:
+ *         description: Appointment or slot not found
+ *       409:
+ *         description: New slot is no longer available
+ */
+router.patch(
+  "/:appointmentId/reschedule",
+  authenticate,
+  requireRole("patient"),
+  rescheduleAppointment
+);
+
+// ---------------------------------------------------------------------------
+// Get appointment details
+// ---------------------------------------------------------------------------
 
 /**
  * @swagger
@@ -166,18 +281,22 @@ router.get(
  *       200:
  *         description: Appointment details
  *       403:
- *         description: Forbidden - Not authorized to view this appointment
+ *         description: Not authorized to view this appointment
  *       404:
  *         description: Appointment not found
  */
 router.get("/:appointmentId", authenticate, getAppointmentById);
+
+// ---------------------------------------------------------------------------
+// Cancel appointment
+// ---------------------------------------------------------------------------
 
 /**
  * @swagger
  * /api/appointments/{appointmentId}/cancel:
  *   patch:
  *     summary: Cancel an appointment
- *     description: Cancels an existing booked appointment and automatically reopens its availability slot.
+ *     description: Cancels an existing booked appointment and automatically reopens its availability slot. Patient cancellation is only allowed before arrival.
  *     tags: [Appointments]
  *     security:
  *       - bearerAuth: []
@@ -191,20 +310,30 @@ router.get("/:appointmentId", authenticate, getAppointmentById);
  *       200:
  *         description: Appointment cancelled and slot reopened
  *       400:
- *         description: Already cancelled or completed
+ *         description: Already cancelled, completed, or cannot be cancelled
  *       403:
- *         description: Forbidden - Not authorized to cancel this appointment
+ *         description: Not authorized to cancel this appointment
  *       404:
  *         description: Appointment not found
+ *       409:
+ *         description: Appointment slot could not be released
  */
-router.patch("/:appointmentId/cancel", authenticate, cancelAppointment);
+router.patch(
+  "/:appointmentId/cancel",
+  authenticate,
+  cancelAppointment
+);
+
+// ---------------------------------------------------------------------------
+// Update doctor note
+// ---------------------------------------------------------------------------
 
 /**
  * @swagger
  * /api/appointments/{appointmentId}/note:
  *   patch:
  *     summary: Add or update doctor consultation notes
- *     description: Allows the assigned doctor or admin to record medical notes on an appointment.
+ *     description: Allows the assigned doctor or admin to record notes on an appointment.
  *     tags: [Appointments]
  *     security:
  *       - bearerAuth: []
@@ -225,14 +354,14 @@ router.patch("/:appointmentId/cancel", authenticate, cancelAppointment);
  *             properties:
  *               doctorNote:
  *                 type: string
- *                 example: "Patient exhibits clear lungs, throat inflammation. Prescribed amoxicillin 500mg 3x daily for 7 days."
+ *                 example: "Patient reports improvement after follow-up."
  *     responses:
  *       200:
  *         description: Doctor note updated successfully
  *       400:
  *         description: Validation error
  *       403:
- *         description: Forbidden - Not authorized to add notes to this appointment
+ *         description: Not authorized to add notes
  *       404:
  *         description: Appointment not found
  */

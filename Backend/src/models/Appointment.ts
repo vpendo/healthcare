@@ -1,3 +1,4 @@
+
 import { Schema, model, type Document, Types } from "mongoose";
 
 export interface IAppointment {
@@ -41,7 +42,6 @@ const appointmentSchema = new Schema<IAppointment>(
       type: Schema.Types.ObjectId,
       ref: "AvailabilitySlot",
       required: true,
-      unique: true, // Only one appointment per slot
     },
     symptoms: {
       type: String,
@@ -83,6 +83,17 @@ const appointmentSchema = new Schema<IAppointment>(
   },
   {
     timestamps: true,
+  }
+);
+
+// Only booked appointments must have unique availability slots.
+// Cancelled appointments remain in history without blocking slot reuse.
+appointmentSchema.index(
+  { slotId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: "booked" },
+    name: "unique_booked_appointment_per_slot",
   }
 );
 
